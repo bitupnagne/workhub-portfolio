@@ -1,0 +1,153 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.portfolio.worksystem.mapper.WorkMemoMapper">
+
+    <sql id="memoBaseColumns">
+        wm.id, wm.sender_user_id, u.name AS sender_name,
+        u.profile_image_filename AS sender_profile_image_filename,
+        wm.title, wm.body, wm.importance, wm.sent_at, wm.created_at, wm.updated_at
+    </sql>
+
+    <sql id="searchAndDateFilter">
+        <if test="query != null and query != ''">
+            AND (wm.title LIKE CONCAT('%', #{query}, '%')
+                 OR wm.body LIKE CONCAT('%', #{query}, '%')
+                 OR u.name LIKE CONCAT('%', #{query}, '%'))
+        </if>
+        <if test="startDate != null and startDate != ''">
+            AND wm.sent_at &gt;= CONCAT(#{startDate}, ' 00:00:00')
+        </if>
+        <if test="endDate != null and endDate != ''">
+            AND wm.sent_at &lt;= CONCAT(#{endDate}, ' 23:59:59')
+        </if>
+    </sql>
+
+    <insert id="insertMemo" parameterType="com.portfolio.worksystem.model.WorkMemo" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO work_memos (sender_user_id, title, body, importance, sent_at, created_at, updated_at)
+        VALUES (#{senderUserId}, #{title}, #{body}, #{importance}, #{sentAt}, NOW(), NOW())
+    </insert>
+
+    <insert id="insertRecipient" parameterType="com.portfolio.worksystem.model.WorkMemoRecipient" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO work_memo_recipients (memo_id, recipient_user_id, read_at, is_starred, created_at)
+        VALUES (#{memoId}, #{recipientUserId}, #{readAt}, #{starred}, NOW())
+    </insert>
+
+    <insert id="insertAttachment" parameterType="com.portfolio.worksystem.model.WorkMemoAttachment" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO work_memo_attachments (memo_id, original_filename, stored_filename, content_type, file_size, attachment_type, created_at)
+        VALUES (#{memoId}, #{originalFilename}, #{storedFilename}, #{contentType}, #{fileSize}, #{attachmentType}, NOW())
+    </insert>
+
+    <select id="findReceivedMemos" resultType="com.portfolio.worksystem.model.WorkMemo">
+        SELECT <include refid="memoBaseColumns"/>,
+               r.read_at AS read_at, r.is_starred AS starred
+        FROM work_memos wm
+        JOIN work_memo_recipients r ON r.memo_id = wm.id AND r.recipient_user_id = #{userId}
+        LEFT JOIN users u ON u.id = wm.sender_user_id
+        WHERE 1=1
+        <include refid="searchAndDateFilter"/>
+        ORDER BY wm.sent_at DESC, wm.id DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="findSentMemos" resultType="com.portfolio.worksystem.model.WorkMemo">
+        SELECT <include refid="memoBaseColumns"/>,
+               (SELECT COUNT(*) FROM work_memo_recipients r1 WHERE r1.memo_id = wm.id) AS recipient_count,
+               (SELECT COUNT(*) FROM work_memo_recipients r2 WHERE r2.memo_id = wm.id AND r2.read_at IS NULL) AS unread_recipient_count
+        FROM work_memos wm
+        LEFT JOIN users u ON u.id = wm.sender_user_id
+        WHERE wm.sender_user_id = #{userId}
+        <include refid="searchAndDateFilter"/>
+        ORDER BY wm.sent_at DESC, wm.id DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="findStarredMemos" resultType="com.portfolio.worksystem.model.WorkMemo">
+        SELECT <include refid="memoBaseColumns"/>,
+               r.read_at AS read_at, r.is_starred AS starred
+        FROM work_memos wm
+        JOIN work_memo_recipients r ON r.memo_id = wm.id AND r.recipient_user_id = #{userId} AND r.is_starred = TRUE
+        LEFT JOIN users u ON u.id = wm.sender_user_id
+        WHERE 1=1
+        <include refid="searchAndDateFilter"/>
+        ORDER BY wm.sent_at DESC, wm.id DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="countReceived" resultType="int">
+        SELECT COUNT(*)
+        FROM work_memos wm
+        JOIN work_memo_recipients r ON r.memo_id = wm.id AND r.recipient_user_id = #{userId}
+        LEFT JOIN users u ON u.id = wm.sender_user_id
+        WHERE 1=1
+        <include refid="searchAndDateFilter"/>
+    </select>
+
+    <select id="countSent" resultType="int">
+        SELECT COUNT(*)
+        FROM work_memos wm
+        LEFT JOIN users u ON u.id = wm.sender_user_id
+        WHERE wm.sender_user_id = #{userId}
+        <include refid="searchAndDateFilter"/>
+    </select>
+
+    <select id="countStarred" resultType="int">
+        SELECT COUNT(*)
+        FROM work_memos wm
+        JOIN work_memo_recipients r ON r.memo_id = wm.id AND r.recipient_user_id = #{userId} AND r.is_starred = TRUE
+        LEFT JOIN users u ON u.id = wm.sender_user_id
+        WHERE 1=1
+        <include refid="searchAndDateFilter"/>
+    </select>
+
+    <select id="countUnreadReceived" resultType="int">
+        SELECT COUNT(*)
+        FROM work_memo_recipients r
+        WHERE r.recipient_user_id = #{userId} AND r.read_at IS NULL
+    </select>
+
+    <select id="findMemo" resultType="com.portfolio.worksystem.model.WorkMemo">
+        SELECT <include refid="memoBaseColumns"/>,
+               r.read_at AS read_at, r.is_starred AS starred,
+               (SELECT COUNT(*) FROM work_memo_recipients r1 WHERE r1.memo_id = wm.id) AS recipient_count
+        FROM work_memos wm
+        LEFT JOIN users u ON u.id = wm.sender_user_id
+        LEFT JOIN work_memo_recipients r ON r.memo_id = wm.id AND r.recipient_user_id = #{userId}
+        WHERE wm.id = #{memoId}
+          AND (wm.sender_user_id = #{userId} OR r.id IS NOT NULL)
+    </select>
+
+    <select id="findRecipients" resultType="com.portfolio.worksystem.model.WorkMemoRecipient">
+        SELECT r.id, r.memo_id, r.recipient_user_id, u.name AS recipient_name,
+               r.read_at, r.is_starred AS starred, r.created_at
+        FROM work_memo_recipients r
+        LEFT JOIN users u ON u.id = r.recipient_user_id
+        WHERE r.memo_id = #{memoId}
+        ORDER BY u.name
+    </select>
+
+    <select id="findAttachments" resultType="com.portfolio.worksystem.model.WorkMemoAttachment">
+        SELECT id, memo_id, original_filename, stored_filename, content_type, file_size, attachment_type, created_at
+        FROM work_memo_attachments
+        WHERE memo_id = #{memoId}
+        ORDER BY id
+    </select>
+
+    <select id="findAttachment" resultType="com.portfolio.worksystem.model.WorkMemoAttachment">
+        SELECT id, memo_id, original_filename, stored_filename, content_type, file_size, attachment_type, created_at
+        FROM work_memo_attachments
+        WHERE id = #{attachmentId}
+    </select>
+
+    <update id="markRead">
+        UPDATE work_memo_recipients
+        SET read_at = NOW()
+        WHERE memo_id = #{memoId} AND recipient_user_id = #{userId} AND read_at IS NULL
+    </update>
+
+    <update id="setStarred">
+        UPDATE work_memo_recipients
+        SET is_starred = #{starred}
+        WHERE memo_id = #{memoId} AND recipient_user_id = #{userId}
+    </update>
+
+</mapper>

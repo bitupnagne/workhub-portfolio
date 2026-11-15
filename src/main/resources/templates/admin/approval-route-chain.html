@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title th:text="${title}">결재 경로 편집</title>
+  <link rel="icon" type="image/svg+xml" th:href="@{/img/AppLogoMini.svg}">
+  <link rel="stylesheet" th:href="@{/css/worksystem.css}">
+</head>
+<body>
+<div class="app">
+  <div th:replace="~{fragments/app :: sidebar}"></div>
+  <main>
+    <div th:replace="~{fragments/app :: topbar}"></div>
+    <div class="content admin-page">
+      <div class="banner ok" th:if="${message}" th:text="${message}"></div>
+      <div class="banner err" th:if="${error}" th:text="${error}"></div>
+
+      <div class="admin-title-row">
+        <div>
+          <h2 th:text="|${docType.label} 결재 경로 편집|">결재 경로 편집</h2>
+          <p>신청자 직책별 결재 단계를 순서대로 구성합니다. <b>저장 시 해당 (종류·직책) 경로가 새 체인으로 교체</b>됩니다.</p>
+          <p class="route-warn">특정 조직 규칙은 해당 조직 소속자에게 기본 직책 규칙보다 먼저 적용됩니다. 예: 품질관리팀 팀원 규칙이 있으면 일반 팀원 규칙보다 우선합니다.</p>
+          <p class="route-warn">실제 결재선은 제출 시 조직도 기준으로 결재자를 찾아 만들어집니다. 해당 직책의 리더가 없거나
+            신청자 본인·앞 단계와 동일인이면 그 단계는 자동 생략·통합되어, 실제 결재 그리드가 아래 설정과 다를 수 있습니다.
+            단, <b>본인 결재</b>로 지정한 단계는 신청자 본인이 결재자가 되어 생략되지 않습니다(본부장·대표이사 등 상급자 셀프 결재용).</p>
+        </div>
+        <a class="btn" th:href="@{/admin/approval-routes(type=${docType.name()})}">목록으로</a>
+      </div>
+
+      <form data-edit-form data-edit-restore-dom data-edit-title="결재 경로" class="admin-form-panel" th:action="@{/admin/approval-routes/chain}"
+            th:object="${chainForm}" method="post" id="chainForm">
+        <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+
+        <div class="form-section-title">대상</div>
+        <div class="admin-form-grid">
+          <input type="hidden" th:field="*{requesterLevel}">
+          <input type="hidden" th:field="*{scopeTeamId}">
+          <div class="field"><label>결재 종류</label>
+            <select th:field="*{documentType}" id="routeDocumentType" data-no-search-select="true">
+              <option th:each="dt : ${documentTypes}" th:value="${dt.name()}" th:text="${dt.label}">연차</option>
+            </select>
+          </div>
+          <div class="field"><label>신청자 직책</label>
+            <select id="routeTargetMode" data-no-search-select="true">
+              <option th:each="lv : ${requesterLevels}" th:value="${lv.name()}" th:text="${lv.label}"
+                      th:selected="${chainForm.scopeTeamId == null and chainForm.requesterLevel == lv}">팀원</option>
+              <option value="SPECIFIC_ORG" th:selected="${chainForm.scopeTeamId != null}">특정 조직 지정</option>
+            </select>
+          </div>
+          <div class="field" id="scopeTeamField" hidden><label>조직 선택</label>
+            <select id="scopeTeamSelect" data-no-search-select="true">
+              <option value="">조직 선택</option>
+              <option th:each="team : ${receiverTeams}" th:value="${team.id}" th:text="${team.path}"
+                      th:selected="${chainForm.scopeTeamId == team.id}">조직</option>
+            </select>
+          </div>
+          <div class="field" id="scopedLevelField" hidden><label>신청자 직책</label>
+            <select id="scopedLevelSelect" data-no-search-select="true">
+              <option th:each="lv : ${requesterLevels}" th:value="${lv.name()}" th:text="${lv.label}"
+                      th:selected="${chainForm.requesterLevel == lv}">팀원</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-section-title">결재 단계 &nbsp;<span class="muted">①  ▶  ②  ▶  ③ 순서로 진행</span></div>
+        <div id="stepList" class="chain-steps">
+          <div class="chain-step" th:each="st,iter : ${chainForm.steps}">
+            <span class="chain-no" th:text="${iter.count}">1</span>
+            <select th:field="*{steps[__${iter.index}__].approverType}" class="step-type" data-no-search-select="true">
+              <option th:each="at : ${approverTypes}" th:if="${at.name() != 'SELF'}" th:value="${at.name()}" th:text="${at.label}">팀장</option>
+            </select>
+            <select th:field="*{steps[__${iter.index}__].approverUserId}" class="step-user"
+                    th:hidden="${st.approverType == null or st.approverType.name() != 'USER'}"
+                    th:disabled="${st.approverType == null or st.approverType.name() != 'USER'}">
+              <option value="">직접 지정 시 선택</option>
+              <option th:each="u : ${users}" th:value="${u.id}" th:text="|${u.name} (${u.teamName ?: '미지정'})|">직원</option>
+            </select>
+            <select th:field="*{steps[__${iter.index}__].approverTeamId}" class="step-team"
+                    th:hidden="${st.approverType == null or st.approverType.name() != 'ORG_LEADER'}"
+                    th:disabled="${st.approverType == null or st.approverType.name() != 'ORG_LEADER'}">
+              <option value="">조직장 선택 시 조직 선택</option>
+              <option th:each="team : ${receiverTeams}" th:value="${team.id}" th:text="${team.path}">조직</option>
+            </select>
+            <label class="self-approve switch-label" title="신청자 본인이 결재 (본부장·대표이사 셀프 결재)">
+              <input type="checkbox" class="self-chk"
+                     th:checked="${st.approverType != null and st.approverType.name() == 'SELF'}">
+              <span class="switch-ui" aria-hidden="true"></span><span class="switch-text">본인 결재</span>
+            </label>
+            <span class="chain-ops">
+              <button type="button" class="rbtn" data-up title="위로">↑</button>
+              <button type="button" class="rbtn" data-down title="아래로">↓</button>
+              <button type="button" class="rbtn del" data-del title="삭제">삭제</button>
+            </span>
+          </div>
+        </div>
+        <button type="button" class="btn" id="addStep" style="margin-top:10px">+ 단계 추가</button>
+
+        <div class="form-section-title">수신 부서 <span class="muted">(경로 전체 공통 · 선택)</span></div>
+        <div class="field">
+          <div class="chip-row receiver-chips" id="receiverChips" style="margin:6px 0 0"></div>
+          <button type="button" class="btn" id="receiverPickBtn" style="margin-top:6px">수신 부서 선택</button>
+          <div id="receiverHidden"></div>
+        </div>
+
+        <div class="form-actions">
+          <span class="muted">단계는 위에서 아래 순서로 결재됩니다. ↑ ↓ 로 순서를 바꿀 수 있습니다.</span>
+          <div>
+            <a class="btn" th:href="@{/admin/approval-routes(type=${docType.name()})}">취소</a>
+            <button class="btn primary" type="submit">체인 저장</button>
+          </div>
+        </div>
+      </form>
+      <form hidden data-edit-delete-owner="chainForm" class="form-actions" th:action="@{/admin/approval-routes/chain/delete}" method="post"
+                        data-confirm-message="이 직책의 결재 경로 전체를 삭제하시겠습니까?"
+                        data-confirm-ok="삭제" data-confirm-danger="true">
+                    <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                    <input type="hidden" name="type" th:value="${chainForm.documentType.name()}">
+                    <input type="hidden" name="level" th:value="${chainForm.requesterLevel.name()}">
+                    <input type="hidden" name="scopeTeamId" th:if="${chainForm.scopeTeamId != null}" th:value="${chainForm.scopeTeamId}">
+                    <button class="rbtn del" type="submit">삭제</button>
+                  </form>
+
+    </div>
+  </main>
+</div>
+
+<template id="stepTpl">
+  <div class="chain-step">
+    <span class="chain-no">0</span>
+    <select class="step-type" name="__t_type" data-no-search-select="true">
+      <option th:each="at : ${approverTypes}" th:if="${at.name() != 'SELF'}" th:value="${at.name()}" th:text="${at.label}">팀장</option>
+    </select>
+    <select class="step-user" name="__t_user" hidden disabled>
+      <option value="">직접 지정 시 선택</option>
+      <option th:each="u : ${users}" th:value="${u.id}" th:text="|${u.name} (${u.teamName ?: '미지정'})|">직원</option>
+    </select>
+    <select class="step-team" name="__t_team" hidden disabled>
+      <option value="">조직장 선택 시 조직 선택</option>
+      <option th:each="team : ${receiverTeams}" th:value="${team.id}" th:text="${team.path}">조직</option>
+    </select>
+    <label class="self-approve switch-label" title="신청자 본인이 결재 (본부장·대표이사 셀프 결재)">
+      <input type="checkbox" class="self-chk">
+      <span class="switch-ui" aria-hidden="true"></span><span class="switch-text">본인 결재</span>
+    </label>
+    <span class="chain-ops">
+      <button type="button" class="rbtn" data-up title="위로">↑</button>
+      <button type="button" class="rbtn" data-down title="아래로">↓</button>
+      <button type="button" class="rbtn del" data-del title="삭제">삭제</button>
+    </span>
+  </div>
+</template>
+
+<div class="vf-modal" id="receiverModal" hidden>
+  <div class="vf-modal-card">
+    <div class="vf-modal-head"><strong>수신 부서 선택</strong><button type="button" class="vf-modal-x" data-rcv-close aria-label="닫기">×</button></div>
+    <div class="vf-modal-body">
+      <label class="rcv-opt" th:each="team : ${receiverTeams}">
+        <input type="checkbox" th:value="${team.id}" th:attr="data-name=${team.name}"
+               th:checked="${chainForm.receiverTeamIds != null and #lists.contains(chainForm.receiverTeamIds, team.id)}">
+        <span th:text="${team.path}">조직</span>
+      </label>
+    </div>
+    <div class="vf-modal-foot">
+      <button type="button" class="rbtn" data-rcv-close>취소</button>
+      <button type="button" class="btn primary" id="receiverApply">적용</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  (function () {
+    function initApprovalChain() {
+    var form = document.getElementById('chainForm');
+    var list = document.getElementById('stepList');
+    var tpl = document.getElementById('stepTpl');
+    if (!form || !list || !tpl || form.dataset.chainReady === 'true') return;
+    form.dataset.chainReady = 'true';
+    var restoringEdit = false;
+    form.addEventListener('click', function (event) {
+      if (event.target.closest('[data-edit-cancel]')) restoringEdit = true;
+    }, true);
+
+    function applyStepState(row) {
+      var chk = row.querySelector('.self-chk');
+      var t = row.querySelector('.step-type');
+      var u = row.querySelector('.step-user');
+      var team = row.querySelector('.step-team');
+      var hid = row.querySelector('.self-hidden');
+      var locked = form.dataset.editState === 'view';
+      function setSelectState(select, enabled) {
+        if (!select) return;
+        select.disabled = !enabled || locked;
+        select.hidden = !enabled;
+        var wrapper = select.nextElementSibling && select.nextElementSibling.classList.contains('vf-search-select')
+          ? select.nextElementSibling
+          : null;
+        if (wrapper) {
+          wrapper.hidden = !enabled;
+          wrapper.querySelectorAll('button,input').forEach(function (el) { el.disabled = !enabled || locked; });
+          if (!enabled) wrapper.classList.remove('open');
+        }
+        if (!enabled && select.value) {
+          select.value = '';
+          select.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+      }
+      if (chk && chk.checked) {
+        if (t) t.disabled = true;
+        setSelectState(u, false);
+        setSelectState(team, false);
+        if (!hid) {
+          hid = document.createElement('input');
+          hid.type = 'hidden';
+          hid.className = 'self-hidden';
+          hid.value = 'SELF';
+          row.appendChild(hid);
+        }
+      } else {
+        if (t) t.disabled = locked;
+        var selectedType = t ? t.value : '';
+        setSelectState(u, selectedType === 'USER');
+        setSelectState(team, selectedType === 'ORG_LEADER');
+        if (hid) hid.remove();
+      }
+    }
+    function renumber() {
+      list.querySelectorAll('.chain-step').forEach(function (row, i) {
+        row.querySelector('.chain-no').textContent = (i + 1);
+        applyStepState(row);
+        var t = row.querySelector('.step-type');
+        var u = row.querySelector('.step-user');
+        var team = row.querySelector('.step-team');
+        var hid = row.querySelector('.self-hidden');
+        var self = row.querySelector('.self-chk');
+        if (t) t.name = self && self.checked ? '' : 'steps[' + i + '].approverType';
+        if (u) u.name = u.hidden ? '' : 'steps[' + i + '].approverUserId';
+        if (team) team.name = team.hidden ? '' : 'steps[' + i + '].approverTeamId';
+        if (hid) hid.name = 'steps[' + i + '].approverType';
+      });
+    }
+    function addStep() {
+      var node = tpl.content.firstElementChild.cloneNode(true);
+      list.appendChild(node);
+      renumber();
+    }
+    list.addEventListener('change', function (e) {
+      if (e.target && (e.target.classList.contains('self-chk') || e.target.classList.contains('step-type'))) renumber();
+    });
+    list.addEventListener('click', function (e) {
+      var btn = e.target.closest('button');
+      if (!btn) return;
+      var row = e.target.closest('.chain-step');
+      if (btn.hasAttribute('data-del')) {
+        row.remove();
+      } else if (btn.hasAttribute('data-up')) {
+        var prev = row.previousElementSibling;
+        if (prev) row.parentNode.insertBefore(row, prev);
+      } else if (btn.hasAttribute('data-down')) {
+        var next = row.nextElementSibling;
+        if (next) row.parentNode.insertBefore(next, row);
+      }
+      renumber();
+    });
+    document.getElementById('addStep').addEventListener('click', addStep);
+    if (!list.querySelector('.chain-step')) addStep();
+    renumber();
+    form.addEventListener('worksystem:edit-state', renumber);
+
+    var documentTypeSelect = document.getElementById('routeDocumentType');
+    var targetMode = document.getElementById('routeTargetMode');
+    var scopeTeamField = document.getElementById('scopeTeamField');
+    var scopeTeamSelect = document.getElementById('scopeTeamSelect');
+    var scopedLevelField = document.getElementById('scopedLevelField');
+    var scopedLevelSelect = document.getElementById('scopedLevelSelect');
+    var requesterLevelInput = form.querySelector('input[name="requesterLevel"]');
+    var scopeTeamInput = form.querySelector('input[name="scopeTeamId"]');
+
+    function syncTargetFields() {
+      var specific = targetMode.value === 'SPECIFIC_ORG';
+      scopeTeamField.hidden = !specific;
+      scopedLevelField.hidden = !specific || !scopeTeamSelect.value;
+      if (specific) {
+        requesterLevelInput.value = scopedLevelSelect.value || requesterLevelInput.value || 'MEMBER';
+        scopeTeamInput.value = scopeTeamSelect.value || '';
+      } else {
+        requesterLevelInput.value = targetMode.value || 'MEMBER';
+        scopeTeamInput.value = '';
+      }
+    }
+
+    function reloadRouteChain(event) {
+      if (restoringEdit || form.dataset.editRestoring === 'true' || form.dataset.editState !== 'editing') return;
+      syncTargetFields();
+      var dt = documentTypeSelect.value || 'LEAVE';
+      var lv = requesterLevelInput.value || 'MEMBER';
+      var url = '/admin/approval-routes/chain?type=' + encodeURIComponent(dt) + '&level=' + encodeURIComponent(lv);
+      if (targetMode.value === 'SPECIFIC_ORG') {
+        if (!scopeTeamSelect.value) return;
+        url += '&scopeTeamId=' + encodeURIComponent(scopeTeamSelect.value);
+      }
+      if (window.worksystemSoftNavigate) window.worksystemSoftNavigate(url);
+      else window.location.href = url;
+    }
+
+    documentTypeSelect.addEventListener('change', reloadRouteChain);
+    targetMode.addEventListener('change', function (event) {
+      syncTargetFields();
+      if (targetMode.value !== 'SPECIFIC_ORG') reloadRouteChain(event);
+    });
+    scopeTeamSelect.addEventListener('change', reloadRouteChain);
+    scopedLevelSelect.addEventListener('change', reloadRouteChain);
+    syncTargetFields();
+
+    var modal = document.getElementById('receiverModal');
+    var chips = document.getElementById('receiverChips');
+    var hidden = document.getElementById('receiverHidden');
+    var savedReceivers = [];
+    var pickerReceivers = [];
+    function selectedReceivers() {
+      return Array.from(modal.querySelectorAll('input[type=checkbox]')).map(function (checkbox) {
+        return { checkbox: checkbox, checked: checkbox.checked };
+      });
+    }
+    function restoreReceivers(snapshot) {
+      snapshot.forEach(function (entry) { entry.checkbox.checked = entry.checked; });
+    }
+    function renderRcv() {
+      chips.innerHTML = '';
+      hidden.innerHTML = '';
+      modal.querySelectorAll('input[type=checkbox]:checked').forEach(function (cb) {
+        var id = cb.value, name = cb.getAttribute('data-name') || id;
+        var chip = document.createElement('span');
+        chip.className = 'm-chip chip-ok';
+        chip.innerHTML = '<span></span><button type="button" class="chip-x" aria-label="제거">×</button>';
+        chip.firstChild.textContent = name;
+        chip.querySelector('.chip-x').disabled = form.dataset.editState === 'view';
+        chip.querySelector('.chip-x').addEventListener('click', function () { cb.checked = false; renderRcv(); });
+        chips.appendChild(chip);
+        var h = document.createElement('input');
+        h.type = 'hidden'; h.name = 'receiverTeamIds'; h.value = id;
+        hidden.appendChild(h);
+      });
+      if (!chips.children.length) {
+        var none = document.createElement('span');
+        none.className = 'muted'; none.textContent = '수신 부서 없음';
+        chips.appendChild(none);
+      }
+    }
+    form.addEventListener('worksystem:edit-start', function () { savedReceivers = selectedReceivers(); renderRcv(); });
+    form.addEventListener('worksystem:edit-cancel', function () { restoreReceivers(savedReceivers); renderRcv(); modal.hidden = true; restoringEdit = false; });
+    form.addEventListener('worksystem:edit-state', function () {
+      chips.querySelectorAll('.chip-x').forEach(function (button) { button.disabled = form.dataset.editState === 'view'; });
+    });
+    document.getElementById('receiverPickBtn').addEventListener('click', function () { pickerReceivers = selectedReceivers(); modal.hidden = false; });
+    modal.querySelectorAll('[data-rcv-close]').forEach(function (b) {
+      b.addEventListener('click', function () { restoreReceivers(pickerReceivers); modal.hidden = true; });
+    });
+    document.getElementById('receiverApply').addEventListener('click', function () { renderRcv(); modal.hidden = true; });
+    modal.addEventListener('click', function (e) { if (e.target === modal) { restoreReceivers(pickerReceivers); modal.hidden = true; } });
+    renderRcv();
+
+    form.addEventListener('submit', function () { syncTargetFields(); renumber(); });
+    }
+    initApprovalChain();
+    document.addEventListener('DOMContentLoaded', initApprovalChain);
+    window.addEventListener('worksystem:content-updated', initApprovalChain);
+  })();
+</script>
+</body>
+</html>

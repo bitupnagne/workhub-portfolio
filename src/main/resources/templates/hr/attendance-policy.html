@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>근태 설정</title>
+  <link rel="icon" type="image/svg+xml" th:href="@{/img/AppLogoMini.svg}">
+  <link rel="stylesheet" th:href="@{/css/worksystem.css}">
+</head>
+<body>
+<div class="app">
+  <div th:replace="~{fragments/app :: sidebar}"></div>
+  <main>
+    <div th:replace="~{fragments/app :: topbar}"></div>
+    <div class="content">
+      <div class="banner ok" th:if="${message}" th:text="${message}"></div>
+      <div class="banner err" th:if="${error}" th:text="${error}"></div>
+
+      <!-- [UX3] 근태 설정 대시보드 — 각 영역 readonly 요약, 우상단 ⚙로 설정 모달 -->
+      <div class="admin-title-row">
+        <div>
+          <h2>근태 설정</h2>
+          <p>회사 근무 제도를 한눈에 확인하고, 각 카드의 설정 버튼으로 설정을 변경합니다. 월 마감은 근태 매트릭스에서 관리합니다.</p>
+        </div>
+      </div>
+
+      <div class="pset-grid">
+
+        <!-- 기본 근무시간 -->
+        <section class="pset-card">
+          <div class="pset-head">
+            <span class="policy-chip">근무 정책</span>
+            <h3>기본 근무시간</h3>
+            <button class="pset-gear" type="button" data-modal-open="#modalWorkTime" title="기본 근무시간 설정"><svg class="btn-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+          </div>
+          <div class="pset-body">
+            <div class="pset-big" th:text="|${#temporals.format(attendanceSetting.defaultStartTime, 'HH:mm')} ~ ${#temporals.format(attendanceSetting.defaultEndTime, 'HH:mm')}|">09:00 ~ 18:00</div>
+            <p class="pset-desc">일자예외·시차출근·요일표가 없을 때 적용되는 전사 기준입니다.</p>
+          </div>
+        </section>
+
+        <!-- 요일별 근무시간표 -->
+        <section class="pset-card">
+          <div class="pset-head">
+            <span class="policy-chip">주간 패턴</span>
+            <h3>요일별 근무시간표</h3>
+            <button class="pset-gear" type="button" data-modal-open="#modalWeek" title="요일별 근무시간표 설정"><svg class="btn-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+          </div>
+          <div class="pset-body">
+            <div class="pset-week">
+              <span th:each="day : ${weekDays}" class="pset-day"
+                    th:classappend="${day.off} ? ' off' : (${day.half} ? ' half' : '')"
+                    th:title="${day.off ? '휴무' : (day.half ? '반일' : '전일') + (day.hasCustomTimes() ? ' ' + #temporals.format(day.startTime,'HH:mm') + '~' + #temporals.format(day.endTime,'HH:mm') : '')}"
+                    th:text="${day.dayLabel()}">월</span>
+              <div class="ws-help">
+                <button class="ws-help-toggle" type="button" data-help-toggle aria-label="요일별 근무시간표 범례" title="요일별 근무시간표 범례" aria-expanded="false" aria-controls="help-legend-5" aria-haspopup="dialog">
+                  <!-- Google Material Icons help_outline, Apache-2.0; META-INF/licenses/google-material-icons-LICENSE.txt -->
+                  <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" aria-hidden="true" focusable="false"><path d="M11 18h2v-2h-2v2zm1-16C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm0-14c-2.21 0-4 1.79-4 4h2c0-1.1.9-2 2-2s2 .9 2 2c0 2-3 1.75-3 5h2c0-2.25 3-2.5 3-5 0-2.21-1.79-4-4-4z"/></svg>
+                </button>
+                <div id="help-legend-5" class="ws-help-popover" data-help-popover role="dialog" aria-labelledby="help-legend-5-title" hidden>
+                  <div class="ws-help-head"><strong id="help-legend-5-title">요일별 근무시간표 범례</strong><button class="btn primary" type="button" data-help-close>닫기</button></div>
+                  <div class="ws-help-items"><span class="pset-day-legend"><i class="pd-full"></i>전일</span>
+                    <span class="pset-day-legend"><i class="pd-half"></i>반일</span>
+                    <span class="pset-day-legend"><i class="pd-off"></i>휴무</span>
+                    — 주 4.5일제 등 주간 패턴. 휴무 요일은 출근 체크 차단·휴가 차감 제외.
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 특정일 근무시간 예외 -->
+        <section class="pset-card">
+          <div class="pset-head">
+            <span class="policy-chip alt">일자 예외</span>
+            <h3>특정일 근무시간</h3>
+            <button class="pset-gear" type="button" data-modal-open="#modalOverride" title="특정일 예외 설정"><svg class="btn-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+          </div>
+          <div class="pset-body">
+            <div class="pset-big" th:text="|${#lists.size(overrides)}건|">0건</div>
+            <div class="chip-row compact-list" th:if="${!#lists.isEmpty(overrides)}">
+              <span class="m-chip" th:each="ov, it : ${overrides}" th:if="${it.index < 4}"
+                    th:text="|${ov.workDate} ${#temporals.format(ov.startTime,'HH:mm')}~${#temporals.format(ov.endTime,'HH:mm')}|">예외</span>
+              <span class="muted" th:if="${#lists.size(overrides) > 4}" th:text="|외 ${#lists.size(overrides) - 4}건|"></span>
+            </div>
+            <p class="pset-desc">전사 행사 등 특정 일자의 근무시간 예외(최우선 적용). 최근 1개월~향후 6개월 기준.</p>
+          </div>
+        </section>
+
+        <!-- 시차출근 조 -->
+        <section class="pset-card">
+          <div class="pset-head">
+            <span class="policy-chip">시차출근</span>
+            <h3>시차출근 조</h3>
+            <button class="pset-gear" type="button" data-modal-open="#modalShift" title="시차출근 조 설정"><svg class="btn-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+          </div>
+          <div class="pset-body">
+            <div class="chip-row compact-list">
+              <span class="m-chip" th:each="g : ${shiftGroups}" th:classappend="${!g.active} ? ' chip-muted'">
+                <b th:text="${g.code}">A</b>
+                <span th:text="${g.followsDefault() ? '기본시간' : #temporals.format(g.startTime,'HH:mm') + '~' + #temporals.format(g.endTime,'HH:mm')}">08:00~17:00</span>
+                <em th:if="${!g.active}" class="muted">중지</em>
+              </span>
+            </div>
+            <p class="pset-desc">직원이 시차출근 신청 시 선택하는 조. 중지한 조는 신규 신청에서 숨겨집니다.</p>
+          </div>
+        </section>
+
+        <!-- 휴가 종류 -->
+        <section class="pset-card pset-card-wide">
+          <div class="pset-head">
+            <span class="policy-chip">휴가 제도</span>
+            <h3>휴가 종류</h3>
+            <button class="pset-gear" type="button" data-modal-open="#modalLeaveTypes" title="휴가 종류 설정"><svg class="btn-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+          </div>
+          <div class="pset-body">
+            <div class="chip-row compact-list">
+              <span class="m-chip" th:each="ltype : ${leaveTypeDefs}" th:classappend="${!ltype.active} ? ' chip-muted'">
+                <b th:text="${ltype.label}">연차</b>
+                <span class="muted" th:text="${(ltype.halfDay ? '0.5일' : '1일') + (ltype.deductAnnual ? '·연차차감' : '') + (ltype.evidenceRequired ? '·증빙' : '')}">1일</span>
+                <em th:if="${!ltype.active}" class="muted">중지</em>
+              </span>
+            </div>
+            <p class="pset-desc">신청 화면 노출·연차 차감·증빙 표기 기준. 신규 종류 추가·중지 모두 설정에서 관리합니다(기존 신청분 유지).</p>
+          </div>
+        </section>
+
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- ⚙ 기본 근무시간 모달 -->
+<div class="schedule-edit-modal" data-settings-modal id="modalWorkTime" hidden>
+  <div class="schedule-edit-dialog compact" role="dialog" aria-modal="true">
+    <div class="schedule-edit-head">
+      <strong>기본 근무시간 설정</strong>
+      <button type="button" data-modal-close aria-label="닫기">×</button>
+    </div>
+    <form th:action="@{/hr/attendance/settings}" method="post" data-edit-form data-edit-title="기본 근무시간">
+      <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+      <div class="schedule-edit-body">
+        <label class="field">출근 기준
+          <input type="time" name="defaultStartTime" th:value="${attendanceSetting.defaultStartTime}" required>
+        </label>
+        <label class="field">퇴근 기준
+          <input type="time" name="defaultEndTime" th:value="${attendanceSetting.defaultEndTime}" required>
+        </label>
+      </div>
+      <div class="schedule-edit-foot">
+        <button class="btn primary" type="submit">저장</button>
+        <button class="rbtn" type="button" data-modal-close>닫기</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ⚙ 요일별 근무시간표 모달 -->
+<div class="schedule-edit-modal" data-settings-modal id="modalWeek" hidden>
+  <div class="schedule-edit-dialog" role="dialog" aria-modal="true">
+    <div class="schedule-edit-head">
+      <strong>요일별 근무시간표 설정</strong>
+      <button type="button" data-modal-close aria-label="닫기">×</button>
+    </div>
+    <form th:action="@{/hr/attendance/week-schedule}" method="post" data-edit-form data-edit-title="요일별 근무시간표">
+      <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+      <div class="schedule-edit-body">
+        <p class="muted" style="margin:0 0 8px;font-size:12px;">반일은 시각 미입력 시 출근 후 4시간 · 시각을 비우면 기본 근무시간 적용</p>
+        <div class="table-scroll">
+          <table class="rt board-table">
+            <thead><tr><th>요일</th><th>근무 구분</th><th>출근</th><th>퇴근</th></tr></thead>
+            <tbody>
+              <tr th:each="day, it : ${weekDays}">
+                <td th:text="${day.dayLabel()}">월</td>
+                <td>
+                  <input type="hidden" th:name="|days[${it.index}].dayOfWeek|" th:value="${day.dayOfWeek}">
+                  <select class="mini-input" th:name="|days[${it.index}].workType|">
+                    <option value="FULL" th:selected="${day.workType == 'FULL'}">전일</option>
+                    <option value="HALF" th:selected="${day.workType == 'HALF'}">반일</option>
+                    <option value="OFF" th:selected="${day.workType == 'OFF'}">휴무</option>
+                  </select>
+                </td>
+                <td><input class="mini-input" type="time" th:name="|days[${it.index}].startTime|" th:value="${day.startTime}"></td>
+                <td><input class="mini-input" type="time" th:name="|days[${it.index}].endTime|" th:value="${day.endTime}"></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="schedule-edit-foot">
+        <button class="btn primary" type="submit">저장</button>
+        <button class="rbtn" type="button" data-modal-close>닫기</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ⚙ 특정일 예외 모달 -->
+<div class="schedule-edit-modal" data-settings-modal id="modalOverride" hidden>
+  <div class="schedule-edit-dialog" role="dialog" aria-modal="true">
+    <div class="schedule-edit-head">
+      <strong>특정일 근무시간 예외</strong>
+      <button type="button" data-modal-close aria-label="닫기">×</button>
+    </div>
+    <div class="schedule-edit-body">
+      <button class="btn primary" type="button" data-modal-open="#modalOverrideCreate">등록</button>
+      <div class="chip-row compact-list" th:if="${!#lists.isEmpty(overrides)}" style="margin-top:10px;">
+        <form th:each="override : ${overrides}" th:action="@{/hr/attendance/override/delete}" method="post" class="m-chip chip-ok">
+          <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+          <input type="hidden" name="workDate" th:value="${override.workDate}">
+          <span th:text="|${override.workDate} ${#temporals.format(override.startTime, 'HH:mm')}~${#temporals.format(override.endTime, 'HH:mm')}|">예외</span>
+          <button class="chip-x" type="submit" aria-label="삭제">×</button>
+        </form>
+      </div>
+      <p class="muted" th:if="${#lists.isEmpty(overrides)}" style="font-size:12px;">등록된 예외가 없습니다.</p>
+    </div>
+    <div class="schedule-edit-foot">
+      <button class="rbtn" type="button" data-modal-close>닫기</button>
+    </div>
+  </div>
+</div>
+
+<!-- ⚙ 시차출근 조 모달 -->
+<div class="schedule-edit-modal" data-settings-modal id="modalOverrideCreate" hidden>
+  <div class="schedule-edit-dialog compact" role="dialog" aria-modal="true" aria-labelledby="overrideCreateTitle">
+    <div class="schedule-edit-head">
+      <strong id="overrideCreateTitle">특정일 근무시간 등록</strong>
+      <button type="button" data-modal-close aria-label="닫기">×</button>
+    </div>
+    <form th:action="@{/hr/attendance/override}" method="post">
+      <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+      <div class="schedule-edit-body">
+        <label class="field">일자<input type="date" name="workDate" required></label>
+        <label class="field">출근<input type="time" name="startTime" required></label>
+        <label class="field">퇴근<input type="time" name="endTime" required></label>
+        <label class="field">메모<input name="note" placeholder="전사 행사"></label>
+      </div>
+      <div class="schedule-edit-foot">
+        <button class="btn primary" type="submit">등록</button>
+        <button class="rbtn" type="button" data-modal-open="#modalOverride">취소</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="schedule-edit-modal" data-settings-modal id="modalShift" hidden>
+  <div class="schedule-edit-dialog" role="dialog" aria-modal="true">
+    <div class="schedule-edit-head">
+      <strong>시차출근 조 설정</strong>
+      <button type="button" data-modal-close aria-label="닫기">×</button>
+    </div>
+    <form th:action="@{/hr/shift-groups/save-all}" method="post" data-edit-form data-edit-restore-dom data-edit-title="시차출근 조">
+      <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+      <div class="schedule-edit-body">
+        <p class="muted" style="margin:0 0 8px;font-size:12px;">시각을 둘 다 비우면 기본 근무시간을 따릅니다.</p>
+        <div class="table-scroll">
+          <!-- 열 폭을 colgroup 으로 고정한다 — 설정 모달이 width:fit-content 라서, 행마다 칸 폭이
+               달라지면 모달 자체가 넓어졌다 좁아졌다 한다(행 추가할 때 화면이 확대되던 원인). -->
+          <table class="rt board-table pset-edit-table">
+            <colgroup>
+              <col style="width:72px"><col><col style="width:104px"><col style="width:104px">
+              <col style="width:84px"><col style="width:64px"><col style="width:36px">
+            </colgroup>
+            <thead><tr><th>코드</th><th>이름</th><th>출근</th><th>퇴근</th><th>상태</th><th>정렬</th><th><span class="sr-only-field">관리</span></th></tr></thead>
+            <tbody id="shiftRows">
+              <tr th:each="g, it : ${shiftGroups}">
+                <td th:text="${g.code}">A</td>
+                <td>
+                  <input type="hidden" th:name="|groups[${it.index}].id|" th:value="${g.id}">
+                  <input class="mini-input" th:name="|groups[${it.index}].label|" th:value="${g.label}" required>
+                </td>
+                <td><input class="mini-input" type="time" th:name="|groups[${it.index}].startTime|" th:value="${g.startTime}"></td>
+                <td><input class="mini-input" type="time" th:name="|groups[${it.index}].endTime|" th:value="${g.endTime}"></td>
+                <td>
+                  <select class="mini-input" th:name="|groups[${it.index}].active|">
+                    <option value="true" th:selected="${g.active}">사용</option>
+                    <option value="false" th:selected="${!g.active}">중지</option>
+                  </select>
+                </td>
+                <td><input class="mini-input" type="number" th:name="|groups[${it.index}].sortOrder|" th:value="${g.sortOrder}"></td>
+                <td class="pset-act-cell"></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <button class="det-add-btn" type="button" data-add-row="#tplShiftRow" data-add-target="#shiftRows"
+                          th:data-next-index="${#lists.size(shiftGroups)}">+ 조 추가</button>
+      </div>
+      <div class="schedule-edit-foot">
+        <button class="btn primary" type="submit">전체 저장</button>
+        <button class="rbtn" type="button" data-modal-close>닫기</button>
+      </div>
+    </form>
+    <template id="tplShiftRow">
+      <tr>
+        <td><input class="mini-input" name="groups[__IDX__].code" placeholder="D" maxlength="30"></td>
+        <td><input class="mini-input" name="groups[__IDX__].label" placeholder="D조 (07:00~16:00)" maxlength="100"></td>
+        <td><input class="mini-input" type="time" name="groups[__IDX__].startTime"></td>
+        <td><input class="mini-input" type="time" name="groups[__IDX__].endTime"></td>
+        <td>
+          <select class="mini-input" name="groups[__IDX__].active">
+            <option value="true" selected>사용</option>
+            <option value="false">중지</option>
+          </select>
+        </td>
+        <td><input class="mini-input" type="number" name="groups[__IDX__].sortOrder" value="0"></td>
+        <td class="pset-act-cell">
+          <button class="chip-x" type="button" data-remove-row title="행 제거">×</button>
+        </td>
+      </tr>
+    </template>
+  </div>
+</div>
+
+<!-- ⚙ 휴가 종류 모달 -->
+<div class="schedule-edit-modal" data-settings-modal id="modalLeaveTypes" hidden>
+  <div class="schedule-edit-dialog" role="dialog" aria-modal="true">
+    <div class="schedule-edit-head">
+      <strong>휴가 종류 설정</strong>
+      <button type="button" data-modal-close aria-label="닫기">×</button>
+    </div>
+    <form th:action="@{/hr/leave-types/save-all}" method="post" data-edit-form data-edit-restore-dom data-edit-title="휴가 종류">
+      <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+      <div class="schedule-edit-body">
+        <p class="muted" style="margin:0 0 8px;font-size:12px;">중지한 종류는 신규 신청에서 숨겨집니다 · 아래 [+ 휴가 종류 추가]로 새 종류를 만들 수 있습니다.</p>
+        <div class="table-scroll">
+          <!-- colgroup 으로 열 폭 고정 — 사유는 위 시차출근 조 표와 같다. -->
+          <table class="rt board-table pset-edit-table">
+            <colgroup>
+              <col><col style="width:84px"><col style="width:92px"><col style="width:84px">
+              <col style="width:84px"><col style="width:64px"><col style="width:36px">
+            </colgroup>
+            <thead><tr><th>이름</th><th>가중치</th><th>연차 차감</th><th>증빙</th><th>상태</th><th>정렬</th><th><span class="sr-only-field">관리</span></th></tr></thead>
+            <tbody id="leaveTypeRows">
+              <tr th:each="ltype, it : ${leaveTypeDefs}">
+                <td>
+                  <input type="hidden" th:name="|types[${it.index}].code|" th:value="${ltype.code}">
+                  <input class="mini-input" th:name="|types[${it.index}].label|" th:value="${ltype.label}" required>
+                </td>
+                <td>
+                  <select class="mini-input" th:name="|types[${it.index}].dayWeight|"
+                          th:disabled="${ltype.code == 'AM_HALF' or ltype.code == 'PM_HALF'}">
+                    <option value="1.0" th:selected="${!ltype.halfDay}">전일</option>
+                    <option value="0.5" th:selected="${ltype.halfDay}">반일</option>
+                  </select>
+                  <input type="hidden" th:name="|types[${it.index}].dayWeight|" value="0.5"
+                         th:if="${ltype.code == 'AM_HALF' or ltype.code == 'PM_HALF'}">
+                </td>
+                <td>
+                  <select class="mini-input" th:name="|types[${it.index}].deductAnnual|">
+                    <option value="true" th:selected="${ltype.deductAnnual}">차감</option>
+                    <option value="false" th:selected="${!ltype.deductAnnual}">미차감</option>
+                  </select>
+                </td>
+                <td>
+                  <select class="mini-input" th:name="|types[${it.index}].evidenceRequired|">
+                    <option value="true" th:selected="${ltype.evidenceRequired}">필요</option>
+                    <option value="false" th:selected="${!ltype.evidenceRequired}">불필요</option>
+                  </select>
+                </td>
+                <td>
+                  <select class="mini-input" th:name="|types[${it.index}].active|">
+                    <option value="true" th:selected="${ltype.active}">사용</option>
+                    <option value="false" th:selected="${!ltype.active}">중지</option>
+                  </select>
+                </td>
+                <td><input class="mini-input" type="number" th:name="|types[${it.index}].sortOrder|" th:value="${ltype.sortOrder}"></td>
+                <td class="pset-act-cell"></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <button class="det-add-btn" type="button" data-add-row="#tplLeaveTypeRow" data-add-target="#leaveTypeRows"
+                th:data-next-index="${#lists.size(leaveTypeDefs)}">+ 휴가 종류 추가</button>
+      </div>
+      <div class="schedule-edit-foot">
+        <button class="btn primary" type="submit">전체 저장</button>
+        <button class="rbtn" type="button" data-modal-close>닫기</button>
+      </div>
+    </form>
+    <template id="tplLeaveTypeRow">
+      <tr>
+        <td class="pset-stack-cell">
+          <input type="hidden" name="types[__IDX__].isNew" value="true">
+          <input class="mini-input" name="types[__IDX__].code" placeholder="코드(영문·숫자·_)" maxlength="30">
+          <input class="mini-input" name="types[__IDX__].label" placeholder="이름 (예: 리프레시 휴가)" maxlength="100">
+        </td>
+        <td>
+          <select class="mini-input" name="types[__IDX__].dayWeight">
+            <option value="1.0" selected>전일</option>
+            <option value="0.5">반일</option>
+          </select>
+        </td>
+        <td>
+          <select class="mini-input" name="types[__IDX__].deductAnnual">
+            <option value="false" selected>미차감</option>
+            <option value="true">차감</option>
+          </select>
+        </td>
+        <td>
+          <select class="mini-input" name="types[__IDX__].evidenceRequired">
+            <option value="false" selected>불필요</option>
+            <option value="true">필요</option>
+          </select>
+        </td>
+        <td>
+          <select class="mini-input" name="types[__IDX__].active">
+            <option value="true" selected>사용</option>
+            <option value="false">중지</option>
+          </select>
+        </td>
+        <td><input class="mini-input" type="number" name="types[__IDX__].sortOrder" value="0"></td>
+        <td class="pset-act-cell">
+          <button class="chip-x" type="button" data-remove-row title="행 제거">×</button>
+        </td>
+      </tr>
+    </template>
+  </div>
+</div>
+
+<script th:src="@{/js/worksystem-settings-modal.js}"></script>
+</body>
+</html>

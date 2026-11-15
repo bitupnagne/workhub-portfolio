@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title th:text="${title}">휴직</title>
+  <link rel="icon" type="image/svg+xml" th:href="@{/img/AppLogoMini.svg}">
+  <link rel="stylesheet" th:href="@{/css/worksystem.css}">
+</head>
+<body>
+<div class="app">
+  <div th:replace="~{fragments/app :: sidebar}"></div>
+  <main>
+    <div th:replace="~{fragments/app :: topbar}"></div>
+    <div class="content admin-page" data-ws-query-contract="hr-loa-v1" data-ws-query-path="self" data-ws-query-params="year page" data-ws-query-context="default">
+      <div class="banner ok" th:if="${message}" th:text="${message}"></div>
+      <div class="banner err" th:if="${error}" th:text="${error}"></div>
+
+      <section class="section-block">
+        <div class="section-header no-caret">
+          <div class="section-left">
+            <span class="sdot sdot-new"></span>
+            <span class="sname">내 휴직 신청</span>
+            <span class="scnt scnt-new" th:text="${#lists.size(myRequests)}" data-ws-query-state="request-count-0">0</span>
+          </div>
+          <div class="section-actions">
+            <form th:action="@{/hr/loa}" method="get" class="inline-form" data-ws-query-filter="filter-0">
+              <select class="mini-input" name="year" onchange="this.form.requestSubmit()">
+                <option th:each="y : ${#numbers.sequence(currentYear - 2, currentYear + 1)}"
+                        th:value="${y}" th:text="|${y}년|" th:selected="${y == loaYear}">2026년</option>
+              </select>
+            </form>
+            <a class="rbtn acc" th:href="@{/hr/loa/new}">휴직 신청</a>
+          </div>
+        </div><div data-ws-query-region="my-requests">
+
+        <div class="table-scroll">
+          <table class="rt board-table">
+            <thead>
+            <tr><th>종류</th><th>기간</th><th>연차 반영</th><th>사유</th><th>상태</th><th>관리</th></tr>
+            </thead>
+            <tbody>
+            <tr class="empty-tr" th:if="${#lists.isEmpty(myRequests)}"><td colspan="6">신청 내역이 없습니다.</td></tr>
+            <tr th:each="r : ${myRequests}">
+              <td th:text="${r.typeLabel}">육아휴직</td>
+              <td th:text="${r.periodText}">2026-01-01 ~ 복직일 미정</td>
+              <td>
+                <span th:if="${r.accrualTreatment == 'EXCLUDED'}" class="err-text" style="font-size:11px">비례 삭감</span>
+                <span th:unless="${r.accrualTreatment == 'EXCLUDED'}" class="muted" style="font-size:11px">출근 간주</span>
+              </td>
+              <td class="muted" th:text="${r.reason ?: '-'}" style="font-size:12px">-</td>
+              <td>
+                <span th:text="${r.status.label}">승인 대기</span>
+                <div th:if="${r.rejectedReason != null}" class="muted" style="font-size:11px" th:text="${r.rejectedReason}"></div>
+              </td>
+              <td>
+                <a class="rbtn" th:href="@{/hr/loa/{id}/document(id=${r.id})}">문서</a>
+                <form th:if="${r.pending}" th:action="@{/hr/loa/{id}/cancel(id=${r.id})}" method="post" style="display:inline"
+                      data-confirm-message="이 휴직 신청을 회수하시겠습니까?" data-confirm-ok="회수">
+                  <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                  <button class="rbtn del" type="submit">회수</button>
+                </form>
+              </td>
+            </tr>
+            </tbody>
+          </table>
+        </div>
+      
+</div></section>
+
+      <div data-ws-query-region="member-requests">
+<section class="section-block" th:if="${!#lists.isEmpty(memberRequests)}">
+        <div class="section-header no-caret">
+          <div class="section-left">
+            <span class="sdot sdot-done"></span>
+            <span class="sname" th:text="${canManageHr} ? '전 직원 휴직' : '팀원 휴직'">팀원 휴직</span>
+            <span class="scnt" th:text="${#lists.size(memberRequests)}">0</span>
+          </div>
+        </div>
+        <div class="table-scroll">
+          <table class="rt board-table">
+            <thead>
+            <tr><th>팀</th><th>이름</th><th>종류</th><th>기간</th><th>연차 반영</th><th>상태</th><th>관리</th></tr>
+            </thead>
+            <tbody>
+            <tr th:each="r : ${memberRequests}">
+              <td th:text="${r.teamName ?: '-'}">팀</td>
+              <td th:text="${r.memberName}">이름</td>
+              <td th:text="${r.typeLabel}">육아휴직</td>
+              <td th:text="${r.periodText}">기간</td>
+              <td>
+                <span th:if="${r.accrualTreatment == 'EXCLUDED'}" class="err-text" style="font-size:11px">비례 삭감</span>
+                <span th:unless="${r.accrualTreatment == 'EXCLUDED'}" class="muted" style="font-size:11px">출근 간주</span>
+              </td>
+              <td th:text="${r.status.label}">승인 대기</td>
+              <td><a class="rbtn" th:href="@{/hr/loa/{id}/document(id=${r.id})}">문서</a></td>
+            </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+</div>
+    </div>
+  </main>
+</div>
+</body>
+</html>

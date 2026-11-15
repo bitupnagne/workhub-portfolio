@@ -1,0 +1,590 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.portfolio.worksystem.mapper.CommunicationMapper">
+
+    <select id="countUnreadNotifications" resultType="int">
+        SELECT COUNT(*)
+        FROM notifications n
+        WHERE n.recipient_user_id = #{userId}
+          AND n.read_at IS NULL
+          AND NOT (
+              n.type = 'MESSAGE'
+              AND EXISTS (
+                  SELECT 1
+                  FROM message_room_user_settings s
+                  WHERE s.user_id = n.recipient_user_id
+                    AND s.muted = TRUE
+                    AND s.room_id = CAST(SUBSTRING_INDEX(SUBSTRING_INDEX(n.link_url, 'messageRoomId=', -1), '&amp;', 1) AS UNSIGNED)
+              )
+          )
+    </select>
+
+    <select id="findNotifications" resultType="Notification">
+        SELECT n.id, n.recipient_user_id, n.sender_user_id, s.name AS sender_name,
+               n.type, n.title, n.body, n.link_url, n.read_at, n.created_at
+        FROM notifications n
+        LEFT JOIN users s ON s.id = n.sender_user_id
+        WHERE n.recipient_user_id = #{userId}
+          AND NOT (
+              n.type = 'MESSAGE'
+              AND EXISTS (
+                  SELECT 1
+                  FROM message_room_user_settings rs
+                  WHERE rs.user_id = n.recipient_user_id
+                    AND rs.muted = TRUE
+                    AND rs.room_id = CAST(SUBSTRING_INDEX(SUBSTRING_INDEX(n.link_url, 'messageRoomId=', -1), '&amp;', 1) AS UNSIGNED)
+              )
+          )
+        ORDER BY n.created_at DESC, n.id DESC
+    </select>
+
+    <select id="findAdminNotices" resultType="AdminNotice">
+        SELECT an.id, an.title, an.body, an.allow_anonymous, an.link_url, an.active,
+               an.created_by, creator.name AS created_by_name,
+               an.updated_by, updater.name AS updated_by_name,
+               an.created_at, an.updated_at,
+               (SELECT COUNT(*) FROM notifications n WHERE n.notice_id = an.id) AS recipient_count,
+               np.start_date AS poll_start_date, np.end_date AS poll_end_date
+        FROM admin_notices an
+        JOIN users creator ON creator.id = an.created_by
+        LEFT JOIN users updater ON updater.id = an.updated_by
+        LEFT JOIN notice_polls np ON np.notice_id = an.id
+        ORDER BY an.active DESC, an.created_at DESC, an.id DESC
+    </select>
+
+    <select id="findAdminNotice" resultType="AdminNotice">
+        SELECT an.id, an.title, an.body, an.allow_anonymous, an.link_url, an.active,
+               an.created_by, creator.name AS created_by_name,
+               an.updated_by, updater.name AS updated_by_name,
+               an.created_at, an.updated_at,
+               (SELECT COUNT(*) FROM notifications n WHERE n.notice_id = an.id) AS recipient_count,
+               np.start_date AS poll_start_date, np.end_date AS poll_end_date
+        FROM admin_notices an
+        JOIN users creator ON creator.id = an.created_by
+        LEFT JOIN users updater ON updater.id = an.updated_by
+        LEFT JOIN notice_polls np ON np.notice_id = an.id
+        WHERE an.id = #{id}
+    </select>
+
+    <!-- 대시보드 공지 피드: 활성 공지(admin_notices) 직접 조회 — 알림 전송 여부와 무관하게 노출.
+         읽음 여부는 해당 공지의 내 알림(있으면)의 read_at로 판정(알림 없으면 미읽음 취급). -->
+    <select id="findNoticeFeed" resultType="Notification">
+        SELECT an.id AS id,
+               an.created_by AS sender_user_id,
+               creator.name AS sender_name,
+               'ADMIN_NOTICE' AS type,
+               an.title AS title,
+               an.body AS body,
+               CONCAT('/notices/', an.id) AS link_url,
+               (SELECT MIN(n.read_at) FROM notifications n
+                  WHERE n.notice_id = an.id AND n.recipient_user_id = #{userId} AND n.type = 'ADMIN_NOTICE') AS read_at,
+               an.created_at AS created_at,
+               np.start_date AS poll_start_date, np.end_date AS poll_end_date
+        FROM admin_notices an
+        JOIN users creator ON creator.id = an.created_by
+        LEFT JOIN notice_polls np ON np.notice_id = an.id
+        WHERE an.active = TRUE
+        ORDER BY an.created_at DESC, an.id DESC
+    </select>
+
+    <insert id="insertAdminNotice" parameterType="AdminNotice" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO admin_notices(title, body, allow_anonymous, link_url, active, created_by, updated_by)
+        VALUES(#{title}, #{body}, #{allowAnonymous}, #{linkUrl}, TRUE, #{createdBy}, #{updatedBy})
+    </insert>
+
+    <update id="updateAdminNotice" parameterType="AdminNotice">
+        UPDATE admin_notices
+        SET title = #{title},
+            body = #{body},
+            allow_anonymous = #{allowAnonymous},
+            link_url = #{linkUrl},
+            active = #{active},
+            updated_by = #{updatedBy}
+        WHERE id = #{id}
+    </update>
+
+    <update id="updateAdminNoticeLinkUrl">
+        UPDATE admin_notices
+        SET link_url = #{linkUrl},
+            updated_by = #{updatedBy}
+        WHERE id = #{id}
+    </update>
+
+    <update id="deactivateAdminNotice">
+        UPDATE admin_notices
+        SET active = FALSE,
+            updated_by = #{updatedBy}
+        WHERE id = #{id}
+    </update>
+
+    <insert id="insertNoticeNotifications">
+        INSERT INTO notifications(notice_id, recipient_user_id, sender_user_id, type, title, body, link_url)
+        SELECT an.id, u.id, #{senderUserId}, 'ADMIN_NOTICE', an.title, #{body}, #{linkUrl}
+        FROM admin_notices an
+        JOIN users u ON u.active = TRUE
+        WHERE an.id = #{noticeId}
+    </insert>
+
+    <delete id="deleteNoticeNotifications">
+        DELETE FROM notifications
+        WHERE notice_id = #{noticeId}
+    </delete>
+
+    <insert id="insertNotification" parameterType="Notification" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO notifications(recipient_user_id, sender_user_id, type, title, body, link_url)
+        VALUES(#{recipientUserId}, #{senderUserId}, #{type}, #{title}, #{body}, #{linkUrl})
+    </insert>
+
+    <update id="markNotificationRead">
+        UPDATE notifications
+        SET read_at = COALESCE(read_at, NOW())
+        WHERE id = #{notificationId}
+          AND recipient_user_id = #{userId}
+    </update>
+
+    <delete id="deleteNotification">
+        DELETE FROM notifications
+        WHERE id = #{notificationId}
+          AND recipient_user_id = #{userId}
+    </delete>
+
+    <update id="markNoticeNotificationsRead">
+        UPDATE notifications
+        SET read_at = COALESCE(read_at, NOW())
+        WHERE notice_id = #{noticeId}
+          AND recipient_user_id = #{userId}
+          AND read_at IS NULL
+    </update>
+
+    <update id="markMessageRoomNotificationsRead">
+        UPDATE notifications
+        SET read_at = COALESCE(read_at, NOW())
+        WHERE recipient_user_id = #{userId}
+          AND type = 'MESSAGE'
+          AND read_at IS NULL
+          AND link_url LIKE CONCAT('%messageRoomId=', #{roomId}, '%')
+    </update>
+
+    <update id="markWorkMemoNotificationsRead">
+        UPDATE notifications
+        SET read_at = COALESCE(read_at, NOW())
+        WHERE recipient_user_id = #{userId}
+          AND type = 'WORK_MEMO'
+          AND read_at IS NULL
+          AND link_url LIKE CONCAT('%/work-memos/', #{memoId}, '%')
+    </update>
+
+    <update id="markAllNotificationsRead">
+        UPDATE notifications
+        SET read_at = COALESCE(read_at, NOW())
+        WHERE recipient_user_id = #{userId}
+          AND read_at IS NULL
+    </update>
+
+    <select id="countUnreadMessages" resultType="int">
+        SELECT COUNT(*)
+        FROM message_room_members mrm
+        JOIN message_messages mm ON mm.room_id = mrm.room_id
+        WHERE mrm.user_id = #{userId}
+          AND (mm.sender_user_id IS NULL OR mm.sender_user_id != #{userId})
+          AND mm.id &gt; COALESCE(mrm.last_read_message_id, 0)
+    </select>
+
+    <select id="findRooms" resultType="MessageRoom">
+        SELECT mr.id, mr.title, mr.created_by, creator.name AS created_by_name, mr.created_at, mr.updated_at,
+               GROUP_CONCAT(DISTINCT CASE WHEN u.id != #{userId} THEN u.name END ORDER BY u.name SEPARATOR ', ') AS member_names,
+               COALESCE((
+                   SELECT COUNT(*)
+                   FROM message_messages unread
+                   WHERE unread.room_id = mr.id
+                     AND (unread.sender_user_id IS NULL OR unread.sender_user_id != #{userId})
+                     AND unread.id &gt; COALESCE(current_member.last_read_message_id, 0)
+               ), 0) AS unread_count,
+               CASE
+                   WHEN last_message.body IS NOT NULL AND TRIM(last_message.body) != '' THEN last_message.body
+                   ELSE (
+                       SELECT CASE
+                                  WHEN SUM(CASE WHEN attachment_type = 'IMAGE' THEN 1 ELSE 0 END) &gt; 0 THEN '이미지를 보냈습니다'
+                                  WHEN COUNT(*) &gt; 0 THEN '파일을 보냈습니다'
+                                  ELSE NULL
+                              END
+                       FROM message_attachments
+                       WHERE message_id = last_message.id
+                   )
+               END AS last_message_body,
+               last_message.created_at AS last_message_at,
+               settings.custom_title,
+               COALESCE(settings.pinned, FALSE) AS pinned,
+               COALESCE(settings.muted, FALSE) AS muted,
+               COALESCE(settings.opacity_percent, 100) AS opacity_percent
+        FROM message_rooms mr
+        JOIN message_room_members current_member ON current_member.room_id = mr.id AND current_member.user_id = #{userId}
+        JOIN message_room_members all_members ON all_members.room_id = mr.id
+        JOIN users u ON u.id = all_members.user_id
+        JOIN users creator ON creator.id = mr.created_by
+        LEFT JOIN message_room_user_settings settings ON settings.room_id = mr.id AND settings.user_id = #{userId}
+        LEFT JOIN message_messages last_message ON last_message.id = (
+            SELECT MAX(mm.id) FROM message_messages mm WHERE mm.room_id = mr.id
+        )
+        GROUP BY mr.id, mr.title, mr.created_by, creator.name, mr.created_at, mr.updated_at,
+                 current_member.last_read_message_id, last_message.id, last_message.body, last_message.created_at,
+                 settings.custom_title, settings.pinned, settings.muted, settings.opacity_percent
+        ORDER BY COALESCE(settings.pinned, FALSE) DESC, COALESCE(last_message.created_at, mr.updated_at) DESC, mr.id DESC
+    </select>
+
+    <select id="findRoom" resultType="MessageRoom">
+        SELECT mr.id, mr.title, mr.created_by, creator.name AS created_by_name, mr.created_at, mr.updated_at,
+               GROUP_CONCAT(DISTINCT CASE WHEN u.id != #{userId} THEN u.name END ORDER BY u.name SEPARATOR ', ') AS member_names,
+               COALESCE((
+                   SELECT COUNT(*)
+                   FROM message_messages unread
+                   JOIN message_room_members current_member ON current_member.room_id = unread.room_id AND current_member.user_id = #{userId}
+                   WHERE unread.room_id = mr.id
+                     AND (unread.sender_user_id IS NULL OR unread.sender_user_id != #{userId})
+                     AND unread.id &gt; COALESCE(current_member.last_read_message_id, 0)
+               ), 0) AS unread_count,
+               settings.custom_title,
+               COALESCE(settings.pinned, FALSE) AS pinned,
+               COALESCE(settings.muted, FALSE) AS muted,
+               COALESCE(settings.opacity_percent, 100) AS opacity_percent
+        FROM message_rooms mr
+        JOIN message_room_members viewer ON viewer.room_id = mr.id AND viewer.user_id = #{userId}
+        JOIN message_room_members all_members ON all_members.room_id = mr.id
+        JOIN users u ON u.id = all_members.user_id
+        JOIN users creator ON creator.id = mr.created_by
+        LEFT JOIN message_room_user_settings settings ON settings.room_id = mr.id AND settings.user_id = #{userId}
+        WHERE mr.id = #{roomId}
+        GROUP BY mr.id, mr.title, mr.created_by, creator.name, mr.created_at, mr.updated_at,
+                 settings.custom_title, settings.pinned, settings.muted, settings.opacity_percent
+    </select>
+    <select id="findDirectRoom" resultType="long">
+        SELECT mr.id
+        FROM message_rooms mr
+        JOIN message_room_members mine ON mine.room_id = mr.id AND mine.user_id = #{userId}
+        JOIN message_room_members target ON target.room_id = mr.id AND target.user_id = #{recipientUserId}
+        WHERE (
+            SELECT COUNT(*)
+            FROM message_room_members members
+            WHERE members.room_id = mr.id
+        ) = 2
+        ORDER BY mr.updated_at DESC, mr.id DESC
+        LIMIT 1
+    </select>
+
+    <select id="findRoomMembers" resultType="MessageRoomMember">
+        SELECT mrm.room_id, mrm.user_id, u.name AS user_name, t.name AS team_name,
+               u.profile_image_filename, mrm.last_read_message_id, mrm.created_at
+        FROM message_room_members mrm
+        JOIN users u ON u.id = mrm.user_id
+        LEFT JOIN teams t ON t.id = u.team_id
+        WHERE mrm.room_id = #{roomId}
+        ORDER BY u.name
+    </select>
+
+    <select id="findRoomMemberUserIds" resultType="long">
+        SELECT user_id
+        FROM message_room_members
+        WHERE room_id = #{roomId}
+        ORDER BY user_id
+    </select>
+
+    <select id="findInviteCandidates" resultType="UserAccount">
+        SELECT u.id, u.username, u.name, u.team_id, t.code AS team_code, t.name AS team_name,
+               u.dept, u.profile_image_filename, u.active
+        FROM users u
+        LEFT JOIN teams t ON t.id = u.team_id
+        WHERE u.active = TRUE
+          AND u.id != #{currentUserId}
+          AND NOT EXISTS (
+              SELECT 1
+              FROM message_room_members mrm
+              WHERE mrm.room_id = #{roomId}
+                AND mrm.user_id = u.id
+          )
+        ORDER BY t.display_order, u.name
+    </select>
+
+    <select id="isRoomMember" resultType="boolean">
+        SELECT COALESCE((
+            SELECT TRUE
+            FROM message_room_members
+            WHERE room_id = #{roomId}
+              AND user_id = #{userId}
+        ), FALSE)
+    </select>
+
+    <insert id="insertRoom" parameterType="MessageRoom" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO message_rooms(title, created_by)
+        VALUES(#{title}, #{createdBy})
+    </insert>
+
+    <insert id="insertRoomMember">
+        INSERT IGNORE INTO message_room_members(room_id, user_id)
+        VALUES(#{roomId}, #{userId})
+    </insert>
+
+    <delete id="deleteRoomMember">
+        DELETE FROM message_room_members
+        WHERE room_id = #{roomId}
+          AND user_id = #{userId}
+    </delete>
+
+    <insert id="insertMessage" parameterType="MessageMessage" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO message_messages(room_id, sender_user_id, body)
+        VALUES(#{roomId}, #{senderUserId}, #{body})
+    </insert>
+
+    <insert id="insertMessageAttachment" parameterType="MessageAttachment" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO message_attachments(message_id, room_id, original_filename, stored_filename,
+                                        content_type, file_size, attachment_type, expires_at)
+        VALUES(#{messageId}, #{roomId}, #{originalFilename}, #{storedFilename},
+               #{contentType}, #{fileSize}, #{attachmentType}, #{expiresAt})
+    </insert>
+
+    <update id="touchRoom">
+        UPDATE message_rooms
+        SET updated_at = NOW()
+        WHERE id = #{roomId}
+    </update>
+
+    <select id="findMessages" resultType="MessageMessage">
+        SELECT mm.id, mm.room_id, mm.sender_user_id, u.name AS sender_name,
+               u.profile_image_filename AS sender_profile_image_filename,
+               mm.body, mm.created_at
+        FROM message_messages mm
+        LEFT JOIN users u ON u.id = mm.sender_user_id
+        WHERE mm.room_id = #{roomId}
+        ORDER BY mm.created_at, mm.id
+    </select>
+
+    <select id="findRecentMessages" resultType="MessageMessage">
+        SELECT mm.id, mm.room_id, mm.sender_user_id, u.name AS sender_name,
+               u.profile_image_filename AS sender_profile_image_filename,
+               mm.body, mm.created_at
+        FROM message_messages mm
+        LEFT JOIN users u ON u.id = mm.sender_user_id
+        WHERE mm.room_id = #{roomId}
+        ORDER BY mm.created_at DESC, mm.id DESC
+        LIMIT #{limit}
+    </select>
+
+    <select id="findMessagesBefore" resultType="MessageMessage">
+        SELECT mm.id, mm.room_id, mm.sender_user_id, u.name AS sender_name,
+               u.profile_image_filename AS sender_profile_image_filename,
+               mm.body, mm.created_at
+        FROM message_messages mm
+        LEFT JOIN users u ON u.id = mm.sender_user_id
+        WHERE mm.room_id = #{roomId} AND mm.id &lt; #{beforeId}
+        ORDER BY mm.created_at DESC, mm.id DESC
+        LIMIT #{limit}
+    </select>
+
+    <select id="existsMessageBefore" resultType="boolean">
+        SELECT EXISTS(SELECT 1 FROM message_messages WHERE room_id = #{roomId} AND id &lt; #{beforeId})
+    </select>
+
+    <select id="findAttachmentsByRoom" resultType="MessageAttachment">
+        SELECT id, message_id, room_id, original_filename, stored_filename, content_type,
+               file_size, attachment_type, expires_at, created_at
+        FROM message_attachments
+        WHERE room_id = #{roomId}
+        ORDER BY id
+    </select>
+
+    <select id="findAttachment" resultType="MessageAttachment">
+        SELECT ma.id, ma.message_id, ma.room_id, ma.original_filename, ma.stored_filename,
+               ma.content_type, ma.file_size, ma.attachment_type, ma.expires_at, ma.created_at
+        FROM message_attachments ma
+        JOIN message_room_members mrm ON mrm.room_id = ma.room_id AND mrm.user_id = #{userId}
+        WHERE ma.id = #{attachmentId}
+        LIMIT 1
+    </select>
+
+    <select id="findExpiredAttachments" resultType="MessageAttachment">
+        SELECT id, message_id, room_id, original_filename, stored_filename, content_type,
+               file_size, attachment_type, expires_at, created_at
+        FROM message_attachments
+        WHERE expires_at &lt; NOW()
+        LIMIT 200
+    </select>
+
+    <delete id="deleteAttachment">
+        DELETE FROM message_attachments
+        WHERE id = #{attachmentId}
+    </delete>
+
+    <select id="findLastMessageId" resultType="long">
+        SELECT MAX(id)
+        FROM message_messages
+        WHERE room_id = #{roomId}
+    </select>
+
+    <update id="markRoomRead">
+        UPDATE message_room_members
+        SET last_read_message_id = #{messageId}
+        WHERE room_id = #{roomId}
+          AND user_id = #{userId}
+          AND COALESCE(last_read_message_id, 0) &lt; #{messageId}
+    </update>
+
+    <select id="findRoomRecipientIds" resultType="long">
+        SELECT user_id
+        FROM message_room_members
+        WHERE room_id = #{roomId}
+          AND user_id != #{senderUserId}
+    </select>
+
+    <select id="isRoomMuted" resultType="boolean">
+        SELECT COALESCE((
+            SELECT muted
+            FROM message_room_user_settings
+            WHERE room_id = #{roomId}
+              AND user_id = #{userId}
+        ), FALSE)
+    </select>
+
+    <insert id="upsertRoomSettings">
+        INSERT INTO message_room_user_settings(room_id, user_id, custom_title, pinned, muted, opacity_percent)
+        VALUES(#{roomId}, #{userId}, #{customTitle}, #{pinned}, #{muted}, #{opacityPercent})
+        ON DUPLICATE KEY UPDATE
+            custom_title = VALUES(custom_title),
+            pinned = VALUES(pinned),
+            muted = VALUES(muted),
+            opacity_percent = VALUES(opacity_percent)
+    </insert>
+
+    <select id="findSystemAccountUserIds" resultType="long">
+        SELECT id
+        FROM users
+        WHERE system_account = TRUE
+    </select>
+
+    <select id="findEmployeePresence" resultType="EmployeePresence">
+        WITH RECURSIVE ancestors AS (
+            SELECT t.id AS team_id, t.id AS ancestor_id, t.parent_id, t.name, t.display_order, 0 AS depth
+            FROM teams t
+            WHERE t.active = TRUE
+            UNION ALL
+            SELECT ancestors.team_id, parent.id AS ancestor_id, parent.parent_id, parent.name, parent.display_order, ancestors.depth + 1 AS depth
+            FROM ancestors
+            JOIN teams parent ON parent.id = ancestors.parent_id
+            WHERE parent.active = TRUE
+        ), top_groups AS (
+            SELECT ancestors.team_id, ancestors.name AS org_group_name, ancestors.display_order AS org_group_order
+            FROM ancestors
+            JOIN teams parent ON parent.id = ancestors.parent_id
+            WHERE parent.parent_id IS NULL
+        )
+        SELECT u.id AS user_id,
+               u.name,
+               u.team_id,
+               t.code AS team_code,
+               t.name AS team_name,
+               u.dept,
+               u.extension_number,
+               u.mobile_number,
+               u.job_title,
+               u.email,
+               u.profile_image_filename,
+               u.contractor,
+               COALESCE(tg.org_group_name, t.name, '미지정') AS org_group_name,
+               CASE
+                   WHEN EXISTS (SELECT 1 FROM company_holidays ch WHERE ch.holiday_date = #{today}) THEN 'HOLIDAY'
+                   WHEN EXISTS (
+                       SELECT 1 FROM leave_requests lr
+                       WHERE lr.user_id = u.id
+                         AND lr.status IN ('APPROVED', 'CANCEL_PENDING')
+                         AND lr.start_date &lt;= #{today}
+                         AND lr.end_date &gt;= #{today}
+                   ) THEN 'LEAVE'
+                   WHEN EXISTS (
+                       SELECT 1 FROM business_trips bt
+                       WHERE bt.user_id = u.id
+                         AND bt.status = 'APPROVED'
+                         AND bt.start_date &lt;= #{today}
+                         AND bt.end_date &gt;= #{today}
+                   ) THEN 'BUSINESS_TRIP'
+                   WHEN ar.check_in_at IS NOT NULL AND ar.check_out_at IS NULL THEN 'WORKING'
+                   WHEN ar.check_in_at IS NOT NULL AND ar.check_out_at IS NOT NULL THEN 'OFF_WORK'
+                   WHEN ar.status IS NOT NULL THEN ar.status
+                   WHEN CURRENT_TIME() &gt; COALESCE((SELECT ats.default_start_time FROM attendance_settings ats WHERE ats.id = 1), '09:00:00') THEN 'ABSENT'
+                   ELSE 'SCHEDULED'
+               END AS status
+        FROM users u
+        LEFT JOIN teams t ON t.id = u.team_id
+        LEFT JOIN top_groups tg ON tg.team_id = t.id
+        LEFT JOIN attendance_records ar ON ar.user_id = u.id AND ar.work_date = #{today}
+        WHERE u.active = TRUE
+        ORDER BY COALESCE(tg.org_group_order, t.display_order, 9999), t.display_order, u.member_order, u.name
+    </select>
+
+    <!-- 투표 -->
+    <insert id="insertPoll" parameterType="NoticePoll" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO notice_polls(notice_id, title, start_date, end_date, include_contractors)
+        VALUES(#{noticeId}, #{title}, #{startDate}, #{endDate}, #{includeContractors})
+    </insert>
+    <insert id="insertPollOption" parameterType="PollOption">
+        INSERT INTO poll_options(poll_id, option_text, sort_order)
+        VALUES(#{pollId}, #{optionText}, #{sortOrder})
+    </insert>
+    <delete id="deletePollByNotice">
+        DELETE FROM notice_polls WHERE notice_id = #{noticeId}
+    </delete>
+    <select id="findPollByNotice" resultType="NoticePoll">
+        SELECT id, notice_id, title, start_date, end_date, include_contractors
+        FROM notice_polls WHERE notice_id = #{noticeId}
+    </select>
+    <select id="findPollOptions" resultType="PollOption">
+        SELECT id, poll_id, option_text, sort_order
+        FROM poll_options WHERE poll_id = #{pollId} ORDER BY sort_order, id
+    </select>
+    <insert id="insertPollVote">
+        INSERT IGNORE INTO poll_votes(poll_id, option_id, voter_token)
+        VALUES(#{pollId}, #{optionId}, #{voterToken})
+    </insert>
+    <select id="findVotedOptionId" resultType="java.lang.Long">
+        SELECT option_id FROM poll_votes
+        WHERE poll_id = #{pollId} AND voter_token = #{voterToken} LIMIT 1
+    </select>
+    <select id="countPollParticipants" resultType="long">
+        SELECT COUNT(DISTINCT voter_token) FROM poll_votes WHERE poll_id = #{pollId}
+    </select>
+    <select id="countOptionVotes" resultType="long">
+        SELECT COUNT(*) FROM poll_votes WHERE option_id = #{optionId}
+    </select>
+    <select id="countActiveUsers" resultType="long">
+        SELECT COUNT(*) FROM users
+        WHERE active = TRUE
+          AND (#{includeContractors} = TRUE OR contractor = FALSE)
+    </select>
+
+    <!-- 댓글 -->
+    <insert id="insertNoticeComment" parameterType="NoticeComment">
+        INSERT INTO notice_comments(notice_id, parent_id, body, anonymous, author_user_id, author_token)
+        VALUES(#{noticeId}, #{parentId}, #{body}, #{anonymous}, #{authorUserId}, #{authorToken})
+    </insert>
+    <select id="findNoticeComments" resultType="NoticeComment">
+        SELECT c.id, c.notice_id, c.parent_id, c.body, c.anonymous, c.created_at,
+               CASE WHEN c.anonymous = TRUE THEN NULL ELSE c.author_user_id END AS author_user_id,
+               CASE WHEN c.anonymous = TRUE THEN '익명' ELSE u.name END AS author_name,
+               CASE WHEN c.anonymous = TRUE THEN NULL ELSE u.profile_image_filename END AS author_profile_image,
+               CASE WHEN c.anonymous = TRUE THEN NULL ELSE t.name END AS author_team_name,
+               CASE WHEN c.anonymous = TRUE THEN NULL ELSE u.dept END AS author_dept,
+               CASE WHEN c.anonymous = TRUE THEN NULL ELSE u.job_title END AS author_job_title,
+               CASE WHEN c.anonymous = TRUE THEN NULL ELSE u.extension_number END AS author_extension_number,
+               CASE WHEN c.anonymous = TRUE THEN NULL ELSE u.mobile_number END AS author_mobile_number,
+               CASE WHEN c.anonymous = TRUE THEN NULL ELSE u.email END AS author_email
+        FROM notice_comments c
+        LEFT JOIN users u ON u.id = c.author_user_id
+        LEFT JOIN teams t ON t.id = u.team_id
+        WHERE c.notice_id = #{noticeId} AND c.active = TRUE
+        ORDER BY c.created_at, c.id
+    </select>
+    <select id="findNoticeComment" resultType="NoticeComment">
+        SELECT id, notice_id, parent_id, body, anonymous, author_user_id, created_at
+        FROM notice_comments WHERE id = #{id} AND active = TRUE
+    </select>
+    <update id="deactivateNoticeComment">
+        UPDATE notice_comments SET active = FALSE WHERE id = #{id}
+    </update>
+</mapper>

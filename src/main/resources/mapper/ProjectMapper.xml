@@ -1,0 +1,142 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.portfolio.worksystem.mapper.ProjectMapper">
+    <sql id="projectColumns">
+        p.*, u.name AS owner_name,
+        (SELECT COUNT(*) FROM project_members m WHERE m.project_id=p.id) AS member_count,
+        (SELECT COUNT(*) FROM project_tasks t WHERE t.project_id=p.id) AS task_count,
+        (SELECT COUNT(*) FROM project_tasks t WHERE t.project_id=p.id AND t.status='DONE') AS done_task_count,
+        (SELECT COUNT(*) FROM project_tasks t WHERE t.project_id=p.id AND t.status!='DONE' AND t.due_date &lt; #{today}) AS overdue_task_count,
+        COALESCE((SELECT ROUND(AVG(t.progress)) FROM project_tasks t WHERE t.project_id=p.id),0) AS progress
+    </sql>
+    <select id="findProjects" resultType="com.portfolio.worksystem.model.Project">
+        SELECT <include refid="projectColumns"/>
+        FROM projects p JOIN users u ON u.id=p.owner_id
+        WHERE EXISTS (SELECT 1 FROM project_members m WHERE m.project_id=p.id AND m.user_id=#{userId})
+        <if test="query != null and query != ''">
+            AND (p.name LIKE CONCAT('%',#{query},'%') OR p.description LIKE CONCAT('%',#{query},'%'))
+        </if>
+        ORDER BY FIELD(p.status,'ACTIVE','COMPLETED','ARCHIVED'), p.updated_at DESC, p.id DESC
+    </select>
+    <select id="findProject" resultType="com.portfolio.worksystem.model.Project">
+        SELECT <include refid="projectColumns"/> FROM projects p JOIN users u ON u.id=p.owner_id WHERE p.id=#{id}
+    </select>
+    <select id="lockProject" resultType="com.portfolio.worksystem.model.Project">
+        SELECT * FROM projects WHERE id=#{id} FOR UPDATE
+    </select>
+    <insert id="insertProject" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO projects(name,description,owner_id,start_date,due_date,status,created_at,updated_at)
+        VALUES(#{name},#{description},#{ownerId},#{startDate},#{dueDate},#{status},#{createdAt},#{updatedAt})
+    </insert>
+    <update id="updateProject">
+        UPDATE projects SET name=#{name},description=#{description},owner_id=#{ownerId},start_date=#{startDate},
+            due_date=#{dueDate},status=#{status},updated_at=#{updatedAt} WHERE id=#{id}
+    </update>
+    <select id="memberCount" resultType="int">
+        SELECT COUNT(*) FROM project_members m JOIN users u ON u.id=m.user_id
+        WHERE m.project_id=#{projectId} AND m.user_id=#{userId} AND u.active=TRUE
+    </select>
+    <select id="findPeople" resultType="com.portfolio.worksystem.model.ProjectPerson">
+        SELECT u.id AS user_id,u.name,u.team_id,t.name AS team_name FROM users u
+        LEFT JOIN teams t ON t.id=u.team_id WHERE u.active=TRUE ORDER BY u.name,u.id
+    </select>
+    <select id="findMembers" resultType="com.portfolio.worksystem.model.ProjectPerson">
+        SELECT u.id AS user_id,u.name,u.team_id,t.name AS team_name FROM project_members m
+        JOIN users u ON u.id=m.user_id LEFT JOIN teams t ON t.id=u.team_id
+        WHERE m.project_id=#{projectId} ORDER BY u.name,u.id
+    </select>
+    <insert id="insertMember">
+        INSERT INTO project_members(project_id,user_id,joined_at) VALUES(#{projectId},#{userId},#{joinedAt})
+    </insert>
+    <delete id="deleteMember">DELETE FROM project_members WHERE project_id=#{projectId} AND user_id=#{userId}</delete>
+    <select id="countMemberReferences" resultType="int">
+        SELECT COUNT(*) FROM project_tasks t WHERE t.project_id=#{projectId} AND
+        (t.assignee_id=#{userId}
+         OR EXISTS(SELECT 1 FROM project_task_collaborators c WHERE c.task_id=t.id AND c.user_id=#{userId})
+         OR EXISTS(SELECT 1 FROM project_task_handovers h WHERE h.task_id=t.id AND h.status='PENDING'
+                   AND (h.to_user_id=#{userId} OR h.from_user_id=#{userId})))
+    </select>
+    <select id="pendingHandoversInProject" resultType="int">
+        SELECT COUNT(*) FROM project_task_handovers h JOIN project_tasks t ON t.id=h.task_id
+        WHERE t.project_id=#{projectId} AND h.status='PENDING'
+    </select>
+    <select id="unfinishedTaskCount" resultType="int">SELECT COUNT(*) FROM project_tasks WHERE project_id=#{projectId} AND status!='DONE'</select>
+
+    <select id="findTasks" resultType="com.portfolio.worksystem.model.ProjectTask">
+        SELECT t.*,u.name AS assignee_name FROM project_tasks t JOIN users u ON u.id=t.assignee_id
+        WHERE t.project_id=#{projectId} ORDER BY t.created_at DESC,t.id DESC
+    </select>
+    <select id="findTask" resultType="com.portfolio.worksystem.model.ProjectTask">
+        SELECT t.*,u.name AS assignee_name FROM project_tasks t JOIN users u ON u.id=t.assignee_id WHERE t.id=#{taskId}
+    </select>
+    <select id="lockTask" resultType="com.portfolio.worksystem.model.ProjectTask">SELECT * FROM project_tasks WHERE id=#{taskId} FOR UPDATE</select>
+    <insert id="insertTask" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO project_tasks(project_id,title,description,assignee_id,status,progress,due_date,version,created_by,created_at,updated_at)
+        VALUES(#{projectId},#{title},#{description},#{assigneeId},#{status},#{progress},#{dueDate},0,#{createdBy},#{createdAt},#{updatedAt})
+    </insert>
+    <update id="updateTask">
+        UPDATE project_tasks SET title=#{title},description=#{description},status=#{status},progress=#{progress},due_date=#{dueDate},
+            updated_at=#{updatedAt},version=version+1 WHERE id=#{id} AND version=#{version}
+    </update>
+    <update id="transferTask">UPDATE project_tasks SET assignee_id=#{assigneeId},updated_at=#{now},version=version+1 WHERE id=#{taskId}</update>
+    <select id="findCollaborators" resultType="com.portfolio.worksystem.model.ProjectPerson">
+        SELECT u.id AS user_id,u.name,u.team_id,t.name AS team_name FROM project_task_collaborators c
+        JOIN users u ON u.id=c.user_id LEFT JOIN teams t ON t.id=u.team_id WHERE c.task_id=#{taskId} ORDER BY u.name,u.id
+    </select>
+    <select id="collaboratorCount" resultType="int">SELECT COUNT(*) FROM project_task_collaborators WHERE task_id=#{taskId} AND user_id=#{userId}</select>
+    <delete id="deleteCollaborators">DELETE FROM project_task_collaborators WHERE task_id=#{taskId}</delete>
+    <insert id="insertCollaborator">INSERT INTO project_task_collaborators(task_id,user_id) VALUES(#{taskId},#{userId})</insert>
+
+    <select id="findChecklist" resultType="com.portfolio.worksystem.model.ProjectChecklist">SELECT * FROM project_task_checklist WHERE task_id=#{taskId} ORDER BY id</select>
+    <select id="findChecklistItem" resultType="com.portfolio.worksystem.model.ProjectChecklist">SELECT * FROM project_task_checklist WHERE id=#{itemId}</select>
+    <insert id="insertChecklist" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO project_task_checklist(task_id,text,completed,created_at) VALUES(#{taskId},#{text},#{completed},#{createdAt})
+    </insert>
+    <update id="updateChecklist">UPDATE project_task_checklist SET completed=#{completed} WHERE id=#{id}</update>
+    <select id="findComments" resultType="com.portfolio.worksystem.model.ProjectComment">
+        SELECT c.*,u.name AS user_name FROM project_task_comments c JOIN users u ON u.id=c.user_id
+        WHERE c.task_id=#{taskId} ORDER BY c.id DESC LIMIT 200
+    </select>
+    <insert id="insertComment" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO project_task_comments(task_id,user_id,body,created_at) VALUES(#{taskId},#{userId},#{body},#{createdAt})
+    </insert>
+    <select id="findEvidence" resultType="com.portfolio.worksystem.model.ProjectEvidence">
+        SELECT e.*,u.name AS uploaded_by_name FROM project_task_evidence e JOIN users u ON u.id=e.uploaded_by
+        WHERE e.task_id=#{taskId} ORDER BY e.id DESC
+    </select>
+    <select id="findEvidenceById" resultType="com.portfolio.worksystem.model.ProjectEvidence">SELECT * FROM project_task_evidence WHERE id=#{id}</select>
+    <insert id="insertEvidence" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO project_task_evidence(project_id,task_id,kind,title,url,original_filename,stored_filename,content_type,size_bytes,uploaded_by,created_at)
+        VALUES(#{projectId},#{taskId},#{kind},#{title},#{url},#{originalFilename},#{storedFilename},#{contentType},#{sizeBytes},#{uploadedBy},#{createdAt})
+    </insert>
+    <sql id="handoverSelect">
+        SELECT h.*,f.name AS from_user_name,t.name AS to_user_name,r.name AS requested_by_name FROM project_task_handovers h
+        JOIN users f ON f.id=h.from_user_id JOIN users t ON t.id=h.to_user_id JOIN users r ON r.id=h.requested_by
+    </sql>
+    <select id="findPendingHandover" resultType="com.portfolio.worksystem.model.ProjectHandover">
+        <include refid="handoverSelect"/> WHERE h.task_id=#{taskId} AND h.status='PENDING' ORDER BY h.id DESC LIMIT 1
+    </select>
+    <select id="findLatestHandover" resultType="com.portfolio.worksystem.model.ProjectHandover">
+        <include refid="handoverSelect"/> WHERE h.task_id=#{taskId} ORDER BY h.id DESC LIMIT 1
+    </select>
+    <select id="findHandovers" resultType="com.portfolio.worksystem.model.ProjectHandover">
+        <include refid="handoverSelect"/> WHERE h.task_id=#{taskId} ORDER BY h.id DESC
+    </select>
+    <select id="findHandover" resultType="com.portfolio.worksystem.model.ProjectHandover"><include refid="handoverSelect"/> WHERE h.id=#{id}</select>
+    <insert id="insertHandover" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO project_task_handovers(task_id,from_user_id,to_user_id,requested_by,summary,status,requested_at)
+        VALUES(#{taskId},#{fromUserId},#{toUserId},#{requestedBy},#{summary},#{status},#{requestedAt})
+    </insert>
+    <update id="respondHandover">
+        UPDATE project_task_handovers SET status=#{status},response=#{response},responded_at=#{respondedAt}
+        WHERE id=#{id} AND status='PENDING'
+    </update>
+    <select id="findActivities" resultType="com.portfolio.worksystem.model.ProjectActivity">
+        SELECT a.*,u.name AS actor_name FROM project_task_activity a JOIN users u ON u.id=a.actor_user_id
+        WHERE a.task_id=#{taskId} ORDER BY a.id DESC LIMIT 200
+    </select>
+    <insert id="insertActivity" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO project_task_activity(project_id,task_id,actor_user_id,report_user_id,report_team_id,event_type,summary,project_name,task_title,task_status,progress,due_date,occurred_at)
+        VALUES(#{projectId},#{taskId},#{actorUserId},#{reportUserId},#{reportTeamId},#{eventType},#{summary},#{projectName},#{taskTitle},#{taskStatus},#{progress},#{dueDate},#{occurredAt})
+    </insert>
+</mapper>

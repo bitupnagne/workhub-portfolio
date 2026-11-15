@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title th:text="${title}">근태 정정 신청</title>
+  <link rel="icon" type="image/svg+xml" th:href="@{/img/AppLogoMini.svg}">
+  <link rel="stylesheet" th:href="@{/css/worksystem.css}">
+</head>
+<body>
+<div class="app">
+  <div th:replace="~{fragments/app :: sidebar}"></div>
+  <main>
+    <div th:replace="~{fragments/app :: topbar}"></div>
+    <div class="content admin-page">
+      <div class="banner ok" th:if="${message}" th:text="${message}"></div>
+      <div class="banner err" th:if="${error}" th:text="${error}"></div>
+
+      <div class="route-alert" th:if="${routeAlert}" th:text="${routeAlert}"></div>
+      <div class="doc-stamp-top" th:if="${routeAlert == null}">
+        <div th:replace="~{fragments/approval :: stamp(${approvalPreview}, null, 'preview', ${applicantName}, ${applicantSignature}, null)}"></div>
+      </div>
+
+      <section class="form-panel">
+        <div class="form-head">
+          <div>
+            <h2>근태 정정 신청</h2>
+            <p>지각·조퇴·미퇴근 등 잘못된 근태 기록을 정정 신청합니다. 승인권자가 승인하면 그때 기록이 정정되며, 상태(지각/조퇴 등)는 해당 일자 기준 근무시간으로 자동 재계산됩니다.</p>
+          </div>
+          <a class="rbtn" th:href="@{/hr/attendance}">근태관리</a>
+        </div>
+        <!-- [UX40] 시간 정정이 아니라 휴가/출장이었던 날 — 신청으로 처리(결재 완료 시 해당 일자 자동 휴가/출장 처리) -->
+        <div class="acn-alt">
+          <span class="acn-alt-note">그날이 실제로는 <b>휴가</b> 또는 <b>출장</b>이었다면 시간 정정 대신 신청으로 처리하세요.
+            결재가 완료되면 해당 일자는 자동으로 휴가/출장 처리됩니다. (아래에서 날짜를 먼저 선택하면 날짜가 채워집니다)</span>
+          <span class="acn-alt-btns">
+            <a class="rbtn acc" data-acn-goto data-app-form data-app-form-label="휴가 신청" th:href="@{/hr/leave/new}">휴가로 처리</a>
+            <a class="rbtn acc" data-acn-goto data-app-form data-app-form-label="출장 신청" th:href="@{/hr/trips/new}">출장으로 처리</a>
+          </span>
+        </div>
+        <form class="stack-form" th:action="@{/hr/attendance/correction/request}" method="post" data-approval-route-warning data-approval-doc-type="ATTENDANCE_CORRECTION">
+          <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+          <div class="att-section">
+            <div class="att-section-label" style="display:flex;align-items:center;gap:10px;">
+              <span>정정 대상 선택</span>
+              <!-- [UX6] 문제 항목 필터 — 지각/조퇴/결근/미퇴근만 -->
+              <span class="acn-filters ws-segmented" role="group" aria-label="정정 대상 필터">
+                <button type="button" class="acn-chip is-active" data-acn-filter="issue" aria-pressed="true">문제 항목만</button>
+                <button type="button" class="acn-chip" data-acn-filter="all" aria-pressed="false">전체 (최근 60일)</button>
+              </span>
+            </div>
+            <div class="att-pick-list" data-att-pick>
+              <label class="att-pick" th:each="r : ${attendanceRows}"
+                     th:with="issue=${r.status != null and (r.status.name() == 'LATE' or r.status.name() == 'EARLY_LEAVE' or r.status.name() == 'ABSENT' or (r.checkInAt != null and r.checkOutAt == null and !r.workDate.isEqual(#temporals.createToday())))}"
+                     th:classappend="${(r.correctionPending ? ' disabled' : '') + (issue ? ' has-issue' : '')}"
+                     th:attr="data-acn-issue=${issue}">
+                <input type="radio" name="workDate" class="att-pick-radio" th:value="${r.workDate}" required
+                       th:disabled="${r.correctionPending}"
+                       th:checked="${targetDate != null and targetDate == r.workDate}"
+                       th:attr="data-cin=${r.checkInAt != null ? #temporals.format(r.checkInAt,'HH:mm') : ''},data-cout=${r.checkOutAt != null ? #temporals.format(r.checkOutAt,'HH:mm') : ''},data-date=${#temporals.format(r.workDate,'yyyy-MM-dd (E)')},data-status=${r.status != null ? r.status.label : '-'}">
+                <span class="att-pick-check" aria-hidden="true"></span>
+                <span class="att-pick-date" th:text="${#temporals.format(r.workDate,'yyyy-MM-dd (E)')}">2026-05-10</span>
+                <span class="acal-pill"
+                      th:classappend="${r.status == null} ? ' plain'
+                                      : (${r.status.name() == 'NORMAL'} ? ' ok'
+                                      : (${r.status.name() == 'LATE' or r.status.name() == 'EARLY_LEAVE'} ? ' warn'
+                                      : (${r.status.name() == 'ABSENT'} ? ' bad' : ' plain')))"
+                      th:text="${r.status != null ? r.status.label : '-'}">정상</span>
+                <span class="att-pick-time">출근 <b th:text="${r.checkInAt != null ? #temporals.format(r.checkInAt,'HH:mm') : '-'}">-</b> · 퇴근 <b th:text="${r.checkOutAt != null ? #temporals.format(r.checkOutAt,'HH:mm') : '-'}">-</b></span>
+                <span class="att-pick-flag" th:if="${r.correctionPending}">정정 진행 중</span>
+              </label>
+              <div class="vf-panel-empty" th:if="${#lists.isEmpty(attendanceRows)}">최근 60일 근태 기록이 없습니다.</div>
+              <div class="vf-panel-empty" data-acn-noissue hidden>문제 항목(지각·조퇴·결근·미퇴근)이 없습니다. [전체]에서 선택하세요.</div>
+            </div>
+          </div>
+
+          <!-- [UX6] 선택 요약 + 전→후 비교 미리보기 -->
+          <div class="acn-preview" data-acn-preview hidden>
+            <div class="acn-preview-date"><b data-acn-p-date>날짜</b> <span class="acal-pill plain" data-acn-p-status>상태</span></div>
+            <div class="acn-preview-flow">
+              <span class="acn-p-col"><em>현재 기록</em><b><span data-acn-p-before-in>-</span> ~ <span data-acn-p-before-out>-</span></b></span>
+              <span class="acn-p-arrow">→</span>
+              <span class="acn-p-col acn-p-after"><em>정정 후</em><b><span data-acn-p-after-in>-</span> ~ <span data-acn-p-after-out>-</span></b></span>
+            </div>
+            <p class="muted" style="margin:4px 0 0;font-size:11px;">승인되면 이 기록으로 정정되고 상태(지각/조퇴 등)는 해당 일자 기준 근무시간으로 자동 재계산됩니다.</p>
+          </div>
+
+          <div class="form-grid two">
+            <label class="field">정정 출근 시각
+              <input type="time" name="requestedCheckIn">
+            </label>
+            <label class="field">정정 퇴근 시각
+              <input type="time" name="requestedCheckOut">
+            </label>
+          </div>
+          <p class="muted">출근/퇴근 시각 중 정정이 필요한 항목만 입력하세요. 최소 한 가지는 입력해야 합니다. (대상을 선택하면 기존 시각이 자동 입력됩니다)</p>
+          <label class="field">정정 사유
+            <textarea class="form-textarea" name="reason" rows="4" placeholder="정정이 필요한 사유를 구체적으로 입력하세요" required></textarea>
+          </label>
+          <button class="btn primary block" type="submit"
+                  th:disabled="${approvalRouteReady == false}"
+                  th:title="${approvalRouteReady == false ? '결재선이 없어 신청할 수 없습니다.' : ''}">정정 신청하기</button>
+        </form>
+      </section>
+
+      <div class="doc-date-footer" th:text="${#temporals.format(#temporals.createToday(), 'yyyy년 MM월 dd일')}">2026년 05월 17일</div>
+    </div>
+  </main>
+</div>
+<!-- [UX23/UX25] 대상 선택 캘린더·미리보기 로직은 전역 JS로 분리(신청 모달 주입 겸용) -->
+<script th:src="@{/js/worksystem-att-correction.js}"></script>
+</body>
+</html>

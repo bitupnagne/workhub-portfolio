@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.portfolio.worksystem.mapper.TripReportMapper">
+
+    <sql id="ReportColumns">
+        r.id, r.trip_id, r.content, r.expense_changed, r.status, r.current_approval_step,
+        r.decided_by, r.rejected_reason, r.created_at, r.updated_at,
+        bt.user_id, u.name AS member_name, t.name AS team_name,
+        bt.destination, bt.purpose, bt.start_date AS trip_start_date, bt.end_date AS trip_end_date
+    </sql>
+
+    <insert id="insertReport" parameterType="BusinessTripReport" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO business_trip_reports(trip_id, content, expense_changed, status, current_approval_step)
+        VALUES(#{tripId}, #{content}, #{expenseChanged}, #{status}, #{currentApprovalStep})
+    </insert>
+
+    <select id="findById" resultType="BusinessTripReport">
+        SELECT <include refid="ReportColumns"/>
+        FROM business_trip_reports r
+        JOIN business_trips bt ON bt.id = r.trip_id
+        JOIN users u ON u.id = bt.user_id
+        LEFT JOIN teams t ON t.id = u.team_id
+        WHERE r.id = #{id}
+    </select>
+
+    <select id="findByTripId" resultType="BusinessTripReport">
+        SELECT <include refid="ReportColumns"/>
+        FROM business_trip_reports r
+        JOIN business_trips bt ON bt.id = r.trip_id
+        JOIN users u ON u.id = bt.user_id
+        LEFT JOIN teams t ON t.id = u.team_id
+        WHERE r.trip_id = #{tripId}
+    </select>
+
+    <select id="findByTripIds" resultType="BusinessTripReport">
+        SELECT <include refid="ReportColumns"/>
+        FROM business_trip_reports r
+        JOIN business_trips bt ON bt.id = r.trip_id
+        JOIN users u ON u.id = bt.user_id
+        LEFT JOIN teams t ON t.id = u.team_id
+        WHERE r.trip_id IN
+        <foreach collection="tripIds" item="tid" open="(" separator="," close=")">#{tid}</foreach>
+    </select>
+
+    <update id="updateStatus">
+        UPDATE business_trip_reports
+        SET status = #{status}, decided_by = #{decidedBy}, rejected_reason = #{rejectedReason}
+        WHERE id = #{id}
+    </update>
+
+    <update id="updateCurrentStep">
+        UPDATE business_trip_reports SET current_approval_step = #{stepOrder} WHERE id = #{id}
+    </update>
+
+    <delete id="deleteReport">
+        DELETE FROM business_trip_reports WHERE id = #{id}
+    </delete>
+
+    <insert id="insertExpense" parameterType="BusinessTripReportExpense" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO business_trip_report_expenses(report_id, expense_type, description, amount, note, display_order)
+        VALUES(#{reportId}, #{expenseType}, #{description}, #{amount}, #{note}, #{displayOrder})
+    </insert>
+
+    <select id="findExpenses" resultType="BusinessTripReportExpense">
+        SELECT id, report_id, expense_type, description, amount, note, display_order
+        FROM business_trip_report_expenses
+        WHERE report_id = #{reportId}
+        ORDER BY display_order, id
+    </select>
+
+    <delete id="deleteExpenses">
+        DELETE FROM business_trip_report_expenses WHERE report_id = #{reportId}
+    </delete>
+
+    <insert id="insertFile" parameterType="BusinessTripReportFile" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO business_trip_report_files(report_id, stored_filename, original_filename, content_type, file_size)
+        VALUES(#{reportId}, #{storedFilename}, #{originalFilename}, #{contentType}, #{fileSize})
+    </insert>
+
+    <select id="findFiles" resultType="BusinessTripReportFile">
+        SELECT id, report_id, stored_filename, original_filename, content_type, file_size, created_at
+        FROM business_trip_report_files
+        WHERE report_id = #{reportId}
+        ORDER BY id
+    </select>
+
+    <select id="findFileById" resultType="BusinessTripReportFile">
+        SELECT id, report_id, stored_filename, original_filename, content_type, file_size, created_at
+        FROM business_trip_report_files
+        WHERE id = #{id}
+    </select>
+
+    <delete id="deleteFiles">
+        DELETE FROM business_trip_report_files WHERE report_id = #{reportId}
+    </delete>
+</mapper>

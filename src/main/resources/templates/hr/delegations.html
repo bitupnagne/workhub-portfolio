@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title th:text="${title}">대리승인자</title>
+  <link rel="icon" type="image/svg+xml" th:href="@{/img/AppLogoMini.svg}">
+  <link rel="stylesheet" th:href="@{/css/worksystem.css}">
+</head>
+<body>
+<div class="app">
+  <div th:replace="~{fragments/app :: sidebar}"></div>
+  <main>
+    <div th:replace="~{fragments/app :: topbar}"></div>
+    <div class="content admin-page">
+      <div class="banner ok" th:if="${message}" th:text="${message}"></div>
+      <div class="banner err" th:if="${error}" th:text="${error}"></div>
+
+      <!-- [UX41] 어느 날짜를 지정해야 하는지 잊지 않도록 — 내 휴가·출장(결재 진행상태 포함) 캘린더 -->
+      <section class="section-block" data-ws-query-contract="delegation-calendar-v1" data-ws-query-path="self" data-ws-query-params="cal" data-ws-query-context="default">
+        <div class="section-header no-caret attendance-calendar-head">
+          <div class="section-left">
+            <a class="rbtn" th:href="@{/hr/delegations(cal=${delCalPrev}, start=${prefillStart}, end=${prefillEnd})}" data-ws-query-state="calendar-heading-0">◀</a>
+            <span class="sname" th:text="|${delCalMonthLabel} 내 일정|" data-ws-query-state="calendar-heading-1">2026년 7월 내 일정</span>
+            <a class="rbtn" th:href="@{/hr/delegations(cal=${delCalNext}, start=${prefillStart}, end=${prefillEnd})}" data-ws-query-state="calendar-heading-2">▶</a>
+          </div>
+          <div class="ws-help">
+            <button class="ws-help-toggle" type="button" data-help-toggle aria-label="결재 진행 상태 범례" title="결재 진행 상태 범례" aria-expanded="false" aria-controls="help-legend-2" aria-haspopup="dialog">
+              <!-- Google Material Icons help_outline, Apache-2.0; META-INF/licenses/google-material-icons-LICENSE.txt -->
+              <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" aria-hidden="true" focusable="false"><path d="M11 18h2v-2h-2v2zm1-16C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm0-14c-2.21 0-4 1.79-4 4h2c0-1.1.9-2 2-2s2 .9 2 2c0 2-3 1.75-3 5h2c0-2.25 3-2.5 3-5 0-2.21-1.79-4-4-4z"/></svg>
+            </button>
+            <div id="help-legend-2" class="ws-help-popover" data-help-popover role="dialog" aria-labelledby="help-legend-2-title" hidden>
+              <div class="ws-help-head"><strong id="help-legend-2-title">결재 진행 상태 범례</strong><button class="btn primary" type="button" data-help-close>닫기</button></div>
+              <div class="ws-help-items">
+                <span class="acal-apr req">결재 요청함</span>
+                <span class="acal-apr prog">결재 진행중</span>
+                <span class="acal-apr done">결재완료</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="table-scroll" data-ws-query-region="calendar">
+          <table class="acal-table">
+            <thead><tr><th>일</th><th>월</th><th>화</th><th>수</th><th>목</th><th>금</th><th>토</th></tr></thead>
+            <tbody>
+              <tr th:each="week : ${delCalendar}">
+                <td th:each="day : ${week}">
+                  <div th:if="${day.day > 0}" class="acal-day" th:classappend="${day.today} ? ' is-today' : ''">
+                    <span class="acal-num" th:classappend="${day.weekend} ? ' weekend' : ''" th:text="${day.day}">1</span>
+                    <span th:each="it : ${day.items}" class="acal-apr" th:classappend="' ' + ${it.aprCss}"
+                          th:title="|${it.kind} ${it.label != null ? it.label : ''} — ${it.aprDetail}|"
+                          th:text="|${it.kind} · ${it.aprLabel}|">휴가 · 결재 진행중</span>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="form-panel" data-registration-section data-registration-title="대리승인자 등록" data-registration-label="등록">
+        <h2>대리승인자 지정</h2>
+        <p>결재권자가 부재인 기간에 들어온 연차/출장 신청은 지정된 대리승인자가 처리할 수 있습니다.</p>
+        <form class="stack-form" th:action="@{/hr/delegations}" method="post">
+          <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+          <div class="form-grid two">
+            <label class="field">대리승인자
+              <select name="delegateUserId" required>
+                <option value="">선택</option>
+                <option th:each="u : ${users}" th:if="${u.id != currentUser.userId}" th:value="${u.id}" th:text="|${u.name} (${u.teamName ?: '미지정'})|">직원</option>
+              </select>
+            </label>
+            <label class="field">사유
+              <input name="reason" placeholder="예: 휴가, 출장">
+            </label>
+            <label class="field">시작일
+              <input type="date" name="startDate" th:value="${prefillStart}" required>
+            </label>
+            <label class="field">종료일
+              <input type="date" name="endDate" th:value="${prefillEnd}" required>
+            </label>
+          </div>
+          <button class="btn primary block" type="submit">지정하기</button>
+        </form>
+      </section>
+
+      <div data-ws-query-contract="delegation-list-v1" data-ws-query-path="self" data-ws-query-params="q status page" data-ws-query-context="default">
+<section class="section-block">
+        <div class="section-header no-caret">
+          <div class="section-left"><span class="sdot sdot-done"></span><span class="sname">대리승인자 검색</span></div>
+        </div>
+        <form class="admin-filter-bar" th:action="@{/hr/delegations}" method="get" data-ws-query-filter="delegation-filter">
+          <input class="admin-search-input" name="q" th:value="${query}" placeholder="대리승인자, 사유 검색">
+          <select name="status" aria-label="상태 필터">
+            <option value="all" th:selected="${statusFilter == 'all'}">전체 상태</option>
+            <option value="active" th:selected="${statusFilter == 'active'}">사용중</option>
+            <option value="inactive" th:selected="${statusFilter == 'inactive'}">종료/삭제</option>
+          </select>
+          <button class="btn primary" type="submit">조회</button>
+          <a class="btn" th:href="@{/hr/delegations}" data-ws-query-reset="">초기화</a>
+        </form>
+      </section>
+
+      <section class="section-block" data-ws-query-region="delegations">
+        <div class="section-header no-caret">
+          <div class="section-left"><span class="sdot sdot-cont"></span><span class="sname">대리승인자 이력</span><span class="scnt scnt-cont" th:text="${#lists.size(delegations)}">0</span></div>
+        </div>
+        <div class="table-scroll">
+        <table class="rt board-table">
+          <thead><tr><th>#</th><th>대리승인자</th><th>기간</th><th>사유</th><th>상태</th><th>관리</th></tr></thead>
+          <tbody>
+          <tr class="empty-tr" th:if="${#lists.isEmpty(delegations)}"><td colspan="6">대리승인자 지정 이력이 없습니다</td></tr>
+          <tr class="mr" th:each="delegation, stat : ${delegations}">
+            <td th:text="${stat.count}">1</td>
+            <td th:text="${delegation.delegateName}">대리승인자</td>
+            <td><span class="date-mono" th:text="|${delegation.startDate} ~ ${delegation.endDate}|"></span></td>
+            <td th:text="${delegation.reason}">사유</td>
+            <td><span class="status-pill" th:classappend="${delegation.active} ? ' ok' : ''" th:text="${delegation.active} ? '사용중' : '해제'">상태</span></td>
+            <td>
+              <form th:if="${delegation.active}" th:action="@{|/hr/delegations/${delegation.id}/delete|}" method="post">
+                <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                <button class="rbtn del" type="submit">해제</button>
+              </form>
+            </td>
+          </tr>
+          </tbody>
+        </table>
+        </div>
+        <div th:replace="~{fragments/app :: pagination(${pageInfo}, ${pageBaseUrl})}"></div>
+      </section>
+</div>
+    </div>
+  </main>
+</div>
+</body>
+</html>

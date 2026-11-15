@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title th:text="${title}">새 자료전송</title>
+  <link rel="icon" type="image/svg+xml" th:href="@{/img/AppLogoMini.svg}">
+  <link rel="stylesheet" th:href="@{/css/worksystem.css}">
+  <style>
+    /* 받는 사람 = 공통 모달(PeoplePicker)로 고른다. 여기서는 고른 결과를 칩으로 보여줄 뿐. */
+    .wm-recipient-box { border:1px solid var(--border); border-radius:9px; background:var(--surface); padding:8px; }
+    .wm-recipient-box.empty { color:var(--text-3); }
+    .wm-chip-row { display:flex; flex-wrap:wrap; gap:6px; min-height:30px; align-items:center; }
+    .wm-chip {
+      display:inline-flex; align-items:center; gap:4px; padding:3px 9px; border-radius:12px;
+      font-size:12px; background:var(--brand-light); color:var(--brand-dark); font-weight:700;
+    }
+    .wm-chip .x { cursor:pointer; opacity:0.6; font-size:13px; padding:0 2px; }
+    .wm-chip .x:hover { opacity:1; }
+  </style>
+</head>
+<body>
+<div class="app">
+  <div th:replace="~{fragments/app :: sidebar}"></div>
+  <main>
+    <div th:replace="~{fragments/app :: topbar}"></div>
+    <div class="content admin-page">
+      <div class="banner err" th:if="${error}" th:text="${error}"></div>
+
+      <div class="action-bar">
+        <a class="btn" th:href="@{/work-memos}">← 목록</a>
+      </div>
+
+      <section class="section-block">
+        <div class="section-header no-caret">
+          <div class="section-left"><span class="sdot sdot-new"></span><span class="sname">새 자료전송 작성</span></div>
+        </div>
+        <form id="memoForm" th:action="@{/work-memos}" method="post" enctype="multipart/form-data" class="admin-form-panel compact">
+          <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+
+          <div class="field">
+            <label>받는 사람 <small id="selectedSummary" style="color:#6b7280;font-weight:500">(0명 선택)</small></label>
+            <div class="wm-recipient-box empty" id="recipientBox">
+              <div class="wm-chip-row" id="chipRow">
+                <span class="muted" id="chipEmpty" style="font-size:11px;padding:0 4px">받는 사람을 선택하세요</span>
+              </div>
+            </div>
+            <button type="button" class="btn" id="openRecipientPicker" style="margin-top:8px">＋ 받는 사람 선택</button>
+            <input type="hidden" name="recipientIds" id="recipientIds">
+          </div>
+
+          <div class="admin-form-grid" style="margin-top:14px">
+            <div class="field" style="grid-column:1 / -1">
+              <label>제목</label>
+              <input type="text" name="title" required maxlength="255" placeholder="제목을 입력하세요">
+            </div>
+          </div>
+
+          <div class="field" style="margin-top:8px">
+            <label>본문</label>
+            <textarea class="form-textarea" name="body" placeholder="내용을 입력하세요"
+                      style="min-height:180px"></textarea>
+          </div>
+
+          <div class="field" style="margin-top:8px">
+            <label>첨부파일 <small style="color:#6b7280;font-weight:500">(총 100MB까지)</small></label>
+            <input type="file" name="attachments" multiple>
+          </div>
+
+          <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;padding-top:12px;border-top:1px solid #f1f5f9">
+            <a class="btn" th:href="@{/work-memos}">취소</a>
+            <button class="btn primary" type="submit" onclick="return submitMemo()">보내기</button>
+          </div>
+        </form>
+      </section>
+    </div>
+  </main>
+</div>
+<script th:inline="javascript">
+  /*<![CDATA[*/
+  var PEOPLE = /*[[${candidates}]]*/ [];
+  var TEAMS  = /*[[${teamNodes}]]*/ [];
+  /*]]>*/
+  // 컨트롤러가 준 UserAccount/Team 객체 → 모달이 쓰는 형태로 정규화.
+  var pickerPeople = (PEOPLE || []).map(function(u){ return { id:u.id, name:u.name, teamName:u.teamName, teamId:u.teamId }; });
+  var pickerTeams  = (TEAMS  || []).map(function(t){ return { id:t.id, name:t.name, parentId:t.parentId }; });
+  var nameById = {}; pickerPeople.forEach(function(p){ nameById[p.id]=p.name; });
+  var selectedIds = [];
+
+  function renderRecipients(){
+    var row=document.getElementById('chipRow');
+    Array.from(row.querySelectorAll('.wm-chip')).forEach(function(c){c.remove();});
+    selectedIds.forEach(function(id){
+      var chip=document.createElement('span');
+      chip.className='wm-chip';
+      chip.innerHTML='<span>'+(nameById[id]||id)+'</span><span class="x" data-id="'+id+'">×</span>';
+      row.appendChild(chip);
+    });
+    document.getElementById('recipientIds').value=selectedIds.join(',');
+    document.getElementById('selectedSummary').textContent='('+selectedIds.length+'명 선택)';
+    document.getElementById('chipEmpty').style.display=selectedIds.length?'none':'';
+    document.getElementById('recipientBox').classList.toggle('empty', selectedIds.length===0);
+  }
+  document.getElementById('openRecipientPicker').addEventListener('click', function(){
+    window.PeoplePicker.open({
+      title:'받는 사람 선택', confirmLabel:'선택 완료',
+      people: pickerPeople, teams: pickerTeams, selected: selectedIds, multi:true,
+      onConfirm: function(ids){ selectedIds = ids.map(Number); renderRecipients(); }
+    });
+  });
+  // 칩의 × 로 개별 제거
+  document.getElementById('chipRow').addEventListener('click', function(e){
+    if(!e.target.classList.contains('x')) return;
+    var id=Number(e.target.getAttribute('data-id'));
+    selectedIds=selectedIds.filter(function(x){ return x!==id; });
+    renderRecipients();
+  });
+  function submitMemo(){
+    if(!selectedIds.length){ alert('받는 사람을 한 명 이상 선택하세요.'); return false; }
+    return true;
+  }
+</script>
+</body>
+</html>

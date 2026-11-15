@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title th:text="${title}">앱 업데이트 관리</title>
+  <link rel="icon" type="image/svg+xml" th:href="@{/img/AppLogoMini.svg}">
+  <link rel="stylesheet" th:href="@{/css/worksystem.css}">
+</head>
+<body>
+<div class="app">
+  <div th:replace="~{fragments/app :: sidebar}"></div>
+  <main>
+    <div th:replace="~{fragments/app :: topbar}"></div>
+    <div class="content admin-page release-page">
+      <div class="banner ok" th:if="${message}" th:text="${message}"></div>
+      <div class="banner err" th:if="${error}" th:text="${error}"></div>
+
+      <div class="admin-title-row release-hero">
+        <div>
+          <span class="dash-eyebrow">Windows App Release</span>
+          <h2>앱 업데이트 관리</h2>
+          <p>FULL 설치파일과 선택 패치 ZIP을 함께 관리합니다. updater 자체 변경은 EXE만 등록해 FULL로 배포하세요.</p>
+        </div>
+        <a class="btn primary windows-download-btn" th:href="@{/api/desktop/releases/latest/download}">최신 설치파일 다운로드</a>
+      </div>
+
+      <section class="section-block release-upload-card">
+        <div class="section-header no-caret">
+          <div class="section-left"><span class="sdot sdot-new"></span><span class="sname">새 버전 등록</span></div>
+        </div>
+        <form data-registration-form data-registration-title="앱 버전 등록" data-registration-label="등록" id="releaseUploadForm" class="admin-form-panel release-upload-form" th:action="@{/admin/releases}" method="post" enctype="multipart/form-data">
+          <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+
+          <div class="release-mode-guide">
+            <label class="release-mode-card full selectable">
+              <input type="radio" name="packageType" value="FULL" checked>
+              <strong>FULL 배포</strong>
+              <span>EXE만 업로드합니다. 신규 설치/전체 교체/updater 변경에 사용합니다.</span>
+            </label>
+            <label class="release-mode-card patch selectable">
+              <input type="radio" name="packageType" value="PATCH">
+              <strong>PATCH 배포</strong>
+              <span>EXE + ZIP + 기준 버전을 입력합니다. 기준 버전 사용자만 ZIP을 받습니다.</span>
+            </label>
+          </div>
+
+          <div class="release-upload-grid">
+            <label>버전
+              <input name="version" placeholder="예: 1.0.5" required>
+            </label>
+            <label>설치파일 EXE
+              <input type="file" name="file" accept=".exe,application/vnd.microsoft.portable-executable,application/octet-stream" required>
+            </label>
+            <label data-patch-only hidden style="display:none">패치 기준 버전
+              <select name="patchBaseVersion" multiple size="6" disabled><option th:each="r : ${releases}" th:value="${r.version}" th:text="${r.version}"></option></select><small class="muted">Ctrl/Shift로 여러 기준 버전을 선택할 수 있습니다.</small>
+              <datalist id="release-versions">
+                <option th:each="r : ${releases}" th:value="${r.version}"></option>
+              </datalist>
+            </label>
+            <label data-patch-only hidden style="display:none">패치 ZIP
+              <input type="file" name="patchFile" accept=".zip,application/zip,application/x-zip-compressed" disabled>
+            </label>
+          </div>
+
+          <label class="release-force-box">
+            <input type="checkbox" name="mandatory" value="true">
+            <span>
+              <strong>강제 업데이트로 배포</strong>
+              <em>체크 시 모든 사용자가 다음 실행 시 자동/강제 업데이트됩니다.</em>
+            </span>
+          </label>
+
+          <label class="release-note-field">릴리스 노트
+            <textarea name="releaseNote" rows="5" placeholder="사용자에게 보여줄 변경 내용을 입력하세요."></textarea>
+          </label>
+          <div class="form-actions">
+            <button class="btn primary" type="submit">버전 등록</button>
+          </div>
+          <div class="release-upload-progress" id="releaseUploadProgress" hidden>
+            <div><strong id="releaseUploadProgressText">업로드 중 0%/100%</strong></div>
+            <progress id="releaseUploadProgressBar" value="0" max="100"></progress>
+          </div>
+        </form>
+      </section>
+
+      <section class="section-block release-list-card">
+        <div class="section-header no-caret">
+          <div class="section-left"><span class="sdot sdot-done"></span><span class="sname">등록된 버전</span><span class="scnt scnt-done" th:text="${#lists.size(releases)}">0</span></div>
+        </div>
+        <div class="table-scroll">
+          <table class="rt admin-data-table release-table">
+            <thead>
+            <tr>
+              <th>버전</th>
+              <th>배포 방식</th>
+              <th>설치파일</th>
+              <th>패치</th>
+              <th>강제</th>
+              <th>상태</th>
+              <th>등록자</th>
+              <th>등록일</th>
+              <th>작업</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr class="empty-tr" th:if="${#lists.isEmpty(releases)}"><td colspan="9">등록된 버전이 없습니다.</td></tr>
+            <th:block th:each="r : ${releases}">
+            <tr class="mr release-row" th:classappend="${!r.active} ? ' release-inactive'">
+              <td><strong th:text="${r.version}">1.0.5</strong></td>
+              <td>
+                <span class="release-kind patch" th:if="${!#lists.isEmpty(r.patches)}">PATCH 가능</span>
+                <span class="release-kind full" th:unless="${!#lists.isEmpty(r.patches)}">FULL 전용</span>
+              </td>
+              <td>
+                <div th:text="${r.fileName}">setup.exe</div>
+                <small class="muted" th:text="${#numbers.formatDecimal(r.fileSize / 1024.0 / 1024.0, 1, 1)} + ' MB'">52.1 MB</small>
+              </td>
+              <td>
+                <div class="release-patch-list" th:if="${!#lists.isEmpty(r.patches)}">
+                  <span class="release-patch-chip" th:each="p : ${r.patches}">
+                    <strong th:text="|기준 ${p.baseVersion}|">기준 1.0.4</strong>
+                    <small class="muted" th:text="${#numbers.formatDecimal(p.fileSize / 1024.0 / 1024.0, 1, 1)} + ' MB'">5.8 MB</small>
+                  </span>
+                </div>
+                <span class="muted" th:unless="${!#lists.isEmpty(r.patches)}">-</span>
+              </td>
+              <td th:text="${r.mandatory} ? '예' : '아니오'">아니오</td>
+              <td>
+                <span class="release-state active" th:if="${r.active}">활성</span>
+                <span class="release-state inactive" th:unless="${r.active}">비활성</span>
+              </td>
+              <td th:text="${r.createdByName ?: '-'}">관리자</td>
+              <td th:text="${#temporals.format(r.createdAt, 'yyyy-MM-dd HH:mm')}">2026-05-25 19:00</td>
+              <td>
+                <a class="rbtn acc" th:if="${r.active}" th:href="@{/api/desktop/releases/{v}/download(v=${r.version})}">EXE</a>
+                <a class="rbtn" th:each="p : ${r.patches}" th:if="${r.active}" th:href="@{/api/desktop/releases/{v}/patch(v=${r.version},baseVersion=${p.baseVersion})}" th:text="|ZIP ${p.baseVersion}|">ZIP</a>
+                <button class="rbtn" type="button" data-release-detail>상세</button>
+                <button class="rbtn" type="button"
+                        th:data-patch-url="@{/admin/releases/{id}/patch(id=${r.id})}"
+                        th:data-patch-version="${r.version}"
+                        data-patch-open>패치 추가</button>
+                <form th:if="${r.active}" th:action="@{/admin/releases/{id}/deactivate(id=${r.id})}" method="post" style="display:inline"
+                      data-confirm="이 버전을 비활성화하시겠습니까?">
+                  <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                  <button class="rbtn del" type="submit">비활성화</button>
+                </form>
+                <form th:unless="${r.active}" th:action="@{/admin/releases/{id}/activate(id=${r.id})}" method="post" style="display:inline"
+                      data-confirm="이 버전을 재활성화하시겠습니까?">
+                  <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                  <button class="rbtn acc" type="submit">재활성화</button>
+                </form>
+              </td>
+            </tr>
+            <tr class="release-detail-row" hidden>
+              <td colspan="9">
+                <div class="release-detail-panel">
+                  <div>
+                    <strong>릴리스 노트</strong>
+                    <p th:text="${#strings.isEmpty(r.releaseNote) ? '등록된 릴리스 노트가 없습니다.' : r.releaseNote}">릴리스 노트</p>
+                  </div>
+                  <div class="release-hash-grid">
+                    <span>EXE SHA-256</span><code th:text="${r.sha256}">sha</code>
+                    <span>EXE 저장 파일</span><code th:text="${r.storedFileName}">file</code>
+                    <span th:if="${!#lists.isEmpty(r.patches)}">PATCH SHA-256</span><code th:if="${!#lists.isEmpty(r.patches)}" th:text="${r.patchSha256}">sha</code>
+                    <span th:if="${!#lists.isEmpty(r.patches)}">PATCH 저장 파일</span><code th:if="${!#lists.isEmpty(r.patches)}" th:text="${r.patchStoredFileName}">patch</code>
+                  </div>
+                </div>
+              </td>
+            </tr>
+            </th:block>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </main>
+</div>
+<dialog class="release-dialog" id="releaseConfirmDialog">
+  <form method="dialog">
+    <h3>작업 확인</h3>
+    <p id="releaseConfirmMessage">진행하시겠습니까?</p>
+    <div class="dialog-actions">
+      <button class="btn" value="cancel">취소</button>
+      <button class="btn primary" value="ok">확인</button>
+    </div>
+  </form>
+</dialog>
+<dialog class="release-dialog" id="releasePatchDialog">
+  <form id="releasePatchForm" method="post" enctype="multipart/form-data">
+    <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+    <h3>패치 추가</h3>
+    <p><strong id="releasePatchVersion">버전</strong>에 PATCH ZIP을 추가합니다.</p>
+    <label>패치 기준 버전
+      <select name="patchBaseVersion" multiple size="6" required><option th:each="r : ${releases}" th:value="${r.version}" th:text="${r.version}"></option></select><small class="muted">Ctrl/Shift로 여러 기준 버전을 선택할 수 있습니다.</small>
+    </label>
+    <label>패치 ZIP
+      <input type="file" name="patchFile" accept=".zip,application/zip,application/x-zip-compressed" required>
+    </label>
+    <div class="dialog-actions">
+      <button class="btn" type="button" data-patch-close>취소</button>
+      <button class="btn primary" type="submit">패치 추가</button>
+    </div>
+  </form>
+</dialog>
+<script>
+document.querySelectorAll('[data-release-detail]').forEach((button) => {
+  button.addEventListener('click', () => {
+    const row = button.closest('tr');
+    const detail = row?.nextElementSibling;
+    if (!detail) return;
+    detail.hidden = !detail.hidden;
+  });
+});
+const confirmDialog = document.getElementById('releaseConfirmDialog');
+const confirmMessage = document.getElementById('releaseConfirmMessage');
+document.querySelectorAll('form[data-confirm]').forEach((form) => {
+  form.addEventListener('submit', (event) => {
+    if (form.dataset.confirmed === 'true') return;
+    event.preventDefault();
+    confirmMessage.textContent = form.dataset.confirm || '진행하시겠습니까?';
+    confirmDialog.showModal();
+    confirmDialog.addEventListener('close', () => {
+      if (confirmDialog.returnValue === 'ok') {
+        form.dataset.confirmed = 'true';
+        form.submit();
+      }
+    }, { once: true });
+  });
+});
+const patchDialog = document.getElementById('releasePatchDialog');
+const patchForm = document.getElementById('releasePatchForm');
+const patchVersion = document.getElementById('releasePatchVersion');
+document.querySelectorAll('[data-patch-open]').forEach((button) => {
+  button.addEventListener('click', () => {
+    patchForm.action = button.dataset.patchUrl;
+    patchVersion.textContent = button.dataset.patchVersion || '선택한 버전';
+    patchDialog.showModal();
+  });
+});
+document.querySelector('[data-patch-close]')?.addEventListener('click', () => patchDialog.close());
+const packageTypeInputs = document.querySelectorAll('input[name="packageType"]');
+const patchOnlyFields = document.querySelectorAll('[data-patch-only]');
+const syncPackageType = () => {
+  const packageType = document.querySelector('input[name="packageType"]:checked')?.value || 'FULL';
+  patchOnlyFields.forEach((field) => {
+    const enabled = packageType === 'PATCH';
+    field.hidden = !enabled;
+    field.style.display = enabled ? '' : 'none';
+    field.querySelectorAll('input,select').forEach((input) => {
+      input.required = enabled;
+      input.disabled = !enabled;
+      if (!enabled) input.value = '';
+    });
+  });
+};
+packageTypeInputs.forEach((input) => input.addEventListener('change', syncPackageType));
+syncPackageType();
+const uploadForm = document.getElementById('releaseUploadForm');
+const uploadProgress = document.getElementById('releaseUploadProgress');
+const uploadProgressText = document.getElementById('releaseUploadProgressText');
+const uploadProgressBar = document.getElementById('releaseUploadProgressBar');
+uploadForm?.addEventListener('submit', (event) => {
+  if (!window.XMLHttpRequest) return;
+  event.preventDefault();
+  const xhr = new XMLHttpRequest();
+  xhr.open('POST', uploadForm.action);
+  xhr.upload.addEventListener('progress', (e) => {
+    if (!e.lengthComputable) return;
+    const pct = Math.max(0, Math.min(100, Math.round((e.loaded / e.total) * 100)));
+    uploadProgress.hidden = false;
+    uploadProgressBar.value = pct;
+    uploadProgressText.textContent = `업로드 중 ${pct}%/100%`;
+  });
+  xhr.addEventListener('load', () => {
+    uploadProgressText.textContent = '처리 완료 100%/100%';
+    const destination = xhr.responseURL || '/admin/releases';
+    if (typeof window.worksystemSoftNavigate === 'function') window.worksystemSoftNavigate(destination);
+    else window.location.href = destination;
+  });
+  xhr.addEventListener('error', () => {
+    uploadProgressText.textContent = '업로드 중 오류가 발생했습니다.';
+  });
+  uploadProgress.hidden = false;
+  uploadProgressBar.value = 0;
+  uploadProgressText.textContent = '업로드 중 0%/100%';
+  xhr.send(new FormData(uploadForm));
+});
+</script>
+</body>
+</html>

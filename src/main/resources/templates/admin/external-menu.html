@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title th:text="${title}">외부망 메뉴 관리</title>
+  <link rel="icon" type="image/svg+xml" th:href="@{/img/AppLogoMini.svg}">
+  <link rel="stylesheet" th:href="@{/css/worksystem.css}">
+</head>
+<body>
+<div class="app">
+  <div th:replace="~{fragments/app :: sidebar}"></div>
+  <main>
+    <div th:replace="~{fragments/app :: topbar}"></div>
+    <div class="content admin-page system-page">
+      <div class="banner ok" th:if="${message}" th:text="${message}"></div>
+      <div class="banner err" th:if="${error}" th:text="${error}"></div>
+
+      <div class="admin-title-row release-hero">
+        <div>
+          <span class="dash-eyebrow">Menu Visibility</span>
+          <h2>내·외부망 메뉴 노출 관리</h2>
+          <p>접속 위치(내부망/외부망)별로 좌측 메뉴를 <b>그룹·하위 항목별로</b> 노출/숨김 설정합니다.
+             숨긴 메뉴는 좌측 메뉴에서 사라지고 주소창 직접 입력도 차단됩니다.</p>
+        </div>
+      </div>
+
+      <section class="section-block system-theme-card">
+        <div class="section-header no-caret">
+          <div class="section-left"><span class="sdot sdot-new"></span><span class="sname">메뉴별 내부망 / 외부망 노출</span></div>
+        </div>
+        <form data-edit-form class="admin-form-panel system-theme-form" th:action="@{/admin/system/external-menu}" method="post">
+          <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+
+          <div class="ext-menu-tree">
+            <div class="ext-menu-zone-head">
+              <span></span>
+              <span class="ext-zone-label">내부망</span>
+              <span class="ext-zone-label">외부망</span>
+            </div>
+            <!-- [UX51] 큰 메뉴만 먼저 — 하위는 아코디언으로 펼침/접힘(기본 접힘). 그룹 행 전체 클릭으로 토글. -->
+            <div class="ext-menu-group" th:each="group : ${menuTree}"
+                 th:classappend="${!#lists.isEmpty(group.children)} ? 'has-children' : ''">
+              <!-- 그룹(1depth) 마스터 토글 — 이 행 전체가 아코디언 헤더(토글 스위치 클릭은 제외) -->
+              <div class="ext-menu-row ext-menu-grow" data-emg-head>
+                <span class="ext-menu-name">
+                  <span class="ext-menu-caret" th:if="${!#lists.isEmpty(group.children)}" aria-hidden="true">⌄</span>
+                  <span th:text="${group.label}">그룹</span>
+                  <em class="ext-menu-count" th:text="|${#lists.size(group.children)}개|">0개</em>
+                </span>
+                <label class="toggle-switch" title="내부망 노출">
+                  <input type="checkbox" name="intShown" th:value="${group.key}" th:checked="${intShownMenus.contains(group.key)}">
+                  <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                </label>
+                <label class="toggle-switch" title="외부망 노출">
+                  <input type="checkbox" name="extShown" th:value="${group.key}" th:checked="${shownMenus.contains(group.key)}">
+                  <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                </label>
+              </div>
+              <!-- 하위(2depth) 항목 토글 — 기본 접힘(높이 애니메이션) -->
+              <div class="ext-menu-children" data-emg-children>
+                <div class="ext-menu-row ext-menu-crow" th:each="item : ${group.children}">
+                  <span class="ext-menu-name"><span class="ext-menu-sub">›</span><span th:text="${item.label}">항목</span></span>
+                  <label class="toggle-switch" title="내부망 노출">
+                    <input type="checkbox" name="intShown" th:value="${item.key}" th:checked="${intShownMenus.contains(item.key)}">
+                    <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                  </label>
+                  <label class="toggle-switch" title="외부망 노출">
+                    <input type="checkbox" name="extShown" th:value="${item.key}" th:checked="${shownMenus.contains(item.key)}">
+                    <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <p class="form-hint" style="margin:12px 0 0;color:var(--text-3);font-size:12px">
+            ※ 스위치 <b>ON = 노출</b>, OFF = 숨김(설정 없으면 기본 노출). <b>그룹을 OFF</b> 하면 그 안 하위 항목도
+            모두 숨겨집니다(하위 개별 설정은 그룹이 ON일 때 적용). 숨김 항목은 좌측 메뉴에서 사라지고
+            <b>주소창 직접 입력(URL)도 차단</b>됩니다. <b>대시보드</b>를 숨기면 그 접속 존에서는 로그인 후
+            아이콘 카드형 <b>런처 화면</b>이 홈이 됩니다. (계정 권한이 없는 메뉴는 이 설정과 무관하게 원래 안 보입니다.
+            <b>내부망 정책은 슈퍼관리자에게 적용되지 않아</b> 이 화면이 스스로 잠기는 일은 없습니다.)
+          </p>
+          <div class="form-actions">
+            <button class="btn primary" type="submit">메뉴 노출 설정 저장</button>
+          </div>
+        </form>
+      </section>
+    </div>
+  </main>
+</div>
+<script>
+  // [UX50] 그룹 토글 OFF면 같은 존의 하위 토글을 흐리게(시각적 안내 — 저장 로직은 서버가 판단)
+  function zoneSync(groupEl, zoneName) {
+    var gcb = groupEl.querySelector('.ext-menu-grow input[name=' + zoneName + ']');
+    var on = gcb && gcb.checked;
+    groupEl.querySelectorAll('.ext-menu-crow input[name=' + zoneName + ']').forEach(function (cb) {
+      cb.closest('.toggle-switch').classList.toggle('is-group-off', !on);
+    });
+  }
+  document.querySelectorAll('.ext-menu-group').forEach(function (groupEl) {
+    ['intShown', 'extShown'].forEach(function (z) { zoneSync(groupEl, z); });
+    groupEl.querySelectorAll('input[type=checkbox]').forEach(function (cb) {
+      cb.addEventListener('change', function () {
+        if (cb.closest('.ext-menu-grow')) zoneSync(groupEl, cb.name);
+      });
+    });
+    // [UX51] 하위 메뉴 아코디언 — 그룹 행(헤더) 전체 클릭으로 펼침/접힘. 토글 스위치 클릭은 제외.
+    var head = groupEl.querySelector('[data-emg-head]');
+    if (head && groupEl.classList.contains('has-children')) {
+      head.setAttribute('role', 'button');
+      head.setAttribute('tabindex', '0');
+      head.setAttribute('aria-expanded', 'false');
+      var toggleOpen = function () {
+        var open = !groupEl.classList.contains('is-open');
+        groupEl.classList.toggle('is-open', open);
+        head.setAttribute('aria-expanded', open ? 'true' : 'false');
+      };
+      head.addEventListener('click', function (e) {
+        if (e.target.closest('.toggle-switch')) return; // 스위치 클릭은 아코디언과 무관
+        toggleOpen();
+      });
+      head.addEventListener('keydown', function (e) {
+        if ((e.key === 'Enter' || e.key === ' ') && !e.target.closest('.toggle-switch')) {
+          e.preventDefault(); toggleOpen();
+        }
+      });
+    }
+  });
+</script>
+</body>
+</html>

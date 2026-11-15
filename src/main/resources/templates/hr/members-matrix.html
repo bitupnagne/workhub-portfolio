@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>근태 매트릭스</title>
+  <link rel="icon" type="image/svg+xml" th:href="@{/img/AppLogoMini.svg}">
+  <link rel="stylesheet" th:href="@{/css/worksystem.css}">
+</head>
+<body>
+<div class="app">
+  <div th:replace="~{fragments/app :: sidebar}"></div>
+  <main>
+    <div th:replace="~{fragments/app :: topbar}"></div>
+    <div class="content" data-ws-query-contract="hr-members-matrix-v1" data-ws-query-path="self" data-ws-query-params="month teamId q page" data-ws-query-context="default">
+      <div class="banner ok" th:if="${message}" th:text="${message}"></div>
+      <div class="banner err" th:if="${error}" th:text="${error}"></div>
+
+      <!-- [A3] 직원×일자 근태 매트릭스 -->
+      <section class="section-block">
+        <div class="section-header no-caret matrix-section-head">
+          <div class="section-left" data-ws-query-state="matrix-heading">
+            <a class="rbtn" th:href="@{/hr/members/matrix(month=${matrixPrev}, teamId=${selectedTeamId}, q=${query})}">◀</a>
+            <span class="sname" th:text="|${matrixMonthLabel} 근태 매트릭스|">2026년 7월 근태 매트릭스</span>
+            <a class="rbtn" th:href="@{/hr/members/matrix(month=${matrixNext}, teamId=${selectedTeamId}, q=${query})}">▶</a>
+            <!-- [A4/UX3] 조회 월 마감 상태 + 관리(HR 담당자) -->
+            <span th:if="${canManageHr}" class="matrix-lock-badge" th:classappend="${matrixMonthLocked} ? 'locked' : 'open'"
+                  th:text="${matrixMonthLocked} ? '마감됨' : '마감 전'">마감 전</span>
+            <button th:if="${canManageHr}" class="rbtn" type="button" data-modal-open="#modalMonthLock">월 마감 관리</button>
+          </div>
+          <div class="section-actions">
+            <form th:action="@{/hr/members/matrix}" method="get" class="inline-form" data-ws-query-filter="filter-0">
+              <input type="hidden" name="month" th:value="${matrixMonth}">
+              <select class="mini-input" name="teamId">
+                <option value="">전체 팀</option>
+                <option th:each="t : ${matrixTeams}" th:value="${t.key}" th:text="${t.value}"
+                        th:selected="${t.key == selectedTeamId}">팀</option>
+              </select>
+              <input class="mini-input" name="q" th:value="${query}" placeholder="이름 / 팀 검색">
+              <button class="rbtn" type="submit">조회</button>
+            </form>
+            <!-- [A7] 월별 근태 집계 CSV -->
+            <a class="rbtn acc" th:href="@{/hr/members/matrix/csv(month=${matrixMonth}, teamId=${selectedTeamId})}" data-ws-query-state="matrix-link-2">CSV</a>
+          <div class="ws-help">
+            <button class="ws-help-toggle" type="button" data-help-toggle aria-label="근태 매트릭스 범례" title="근태 매트릭스 범례" aria-expanded="false" aria-controls="help-legend-4" aria-haspopup="dialog">
+              <!-- Google Material Icons help_outline, Apache-2.0; META-INF/licenses/google-material-icons-LICENSE.txt -->
+              <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" aria-hidden="true" focusable="false"><path d="M11 18h2v-2h-2v2zm1-16C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm0-14c-2.21 0-4 1.79-4 4h2c0-1.1.9-2 2-2s2 .9 2 2c0 2-3 1.75-3 5h2c0-2.25 3-2.5 3-5 0-2.21-1.79-4-4-4z"/></svg>
+            </button>
+            <div id="help-legend-4" class="ws-help-popover" data-help-popover role="dialog" aria-labelledby="help-legend-4-title" hidden>
+              <div class="ws-help-head"><strong id="help-legend-4-title">근태 매트릭스 범례</strong><button class="btn primary" type="button" data-help-close>닫기</button></div>
+              <div class="ws-help-items">
+                <span class="acal-pill ok">정 정상</span>
+                <span class="acal-pill warn">지 지각 · 조 조퇴</span>
+                <span class="acal-pill bad">결 결근</span>
+                <span class="acal-pill trip">출 출장</span>
+                <span class="acal-pill hol">휴 휴무·휴가</span>
+                <span class="acal-pill plain">빈칸 = 휴무 요일 · 미출근(예정)</span>
+                <span class="muted" th:if="${canManageHr}" style="font-size:11px;">셀을 클릭하면 상세 확인·직권 정정할 수 있습니다 (사유 필수, 감사 기록)</span>
+              </div>
+            </div>
+          </div>
+          </div>
+        </div><div data-ws-query-region="matrix-results">
+
+        
+        <div class="table-scroll matrix-scroll">
+          <table class="rt matrix-table no-mcard">
+            <thead>
+              <tr>
+                <th class="matrix-name">팀 / 이름</th>
+                <th th:each="d : ${matrixDays}" th:classappend="${d.weekend} ? 'weekend' : ''" th:text="${d.day}">1</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr class="empty-tr" th:if="${#lists.isEmpty(matrixRows)}"><td th:colspan="${#lists.size(matrixDays) + 1}">조회 조건에 맞는 직원이 없습니다.</td></tr>
+              <tr th:each="row : ${matrixRows}">
+                <td class="matrix-name">
+                  <span class="muted" th:text="${row.teamName}">팀</span>
+                  <b th:text="${row.memberName}">이름</b>
+                </td>
+                <td th:each="cell, it : ${row.cells}" class="matrix-cell"
+                    th:classappend="${cell == null} ? '' : (${cell.status.name() == 'NORMAL'} ? 'st-ok'
+                                    : (${cell.status.name() == 'LATE' or cell.status.name() == 'EARLY_LEAVE'} ? 'st-warn'
+                                    : (${cell.status.name() == 'ABSENT'} ? 'st-bad'
+                                    : (${cell.status.name() == 'BUSINESS_TRIP'} ? 'st-trip'
+                                    : (${cell.status.name() == 'HOLIDAY'} ? 'st-hol' : 'st-plain')))))"
+                    th:attr="data-mx-date=${matrixDays[it.index].iso},
+                             data-mx-user=${row.userId},
+                             data-mx-name=|${row.teamName != null ? row.teamName + ' · ' : ''}${row.memberName}|,
+                             data-mx-status=${cell != null ? cell.status.name() : ''},
+                             data-mx-statuslabel=${cell != null ? cell.status.label : '휴무 요일'},
+                             data-mx-sched=${cell != null ? #temporals.format(cell.startTime, 'HH:mm') + '~' + #temporals.format(cell.endTime, 'HH:mm') : ''},
+                             data-mx-in=${cell != null and cell.checkInAt != null ? #temporals.format(cell.checkInAt, 'HH:mm') : ''},
+                             data-mx-out=${cell != null and cell.checkOutAt != null ? #temporals.format(cell.checkOutAt, 'HH:mm') : ''},
+                             data-mx-note=${cell != null ? cell.note : ''}"
+                    th:text="${cell != null ? cell.status.shortLabel : ''}">정</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      
+</div></section>
+    </div>
+  </main>
+</div>
+
+<!-- [A3] 셀 상세 + 직권 정정 모달 -->
+<div class="schedule-edit-modal" data-mx-modal hidden>
+  <div class="schedule-edit-dialog compact" role="dialog" aria-modal="true" aria-labelledby="mxModalTitle">
+    <div class="schedule-edit-head">
+      <strong id="mxModalTitle"><span data-mx-modal-name>이름</span> · <span data-mx-modal-date>일자</span></strong>
+      <button type="button" data-mx-close aria-label="닫기">×</button>
+    </div>
+    <div class="schedule-edit-body">
+      <dl class="acal-detail">
+        <dt>상태</dt><dd data-mx-modal-status>-</dd>
+        <dt>기준 근무시간</dt><dd data-mx-modal-sched>-</dd>
+        <dt>출근 / 퇴근</dt><dd data-mx-modal-inout>-</dd>
+        <dt>비고</dt><dd data-mx-modal-note>-</dd>
+      </dl>
+      <form th:if="${canManageHr}" th:action="@{/hr/members/matrix/adjust}" method="post" class="mx-adjust-form"
+            data-confirm-message="직권 정정하시겠습니까? 감사 기록이 남습니다." data-confirm-ok="정정">
+        <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+        <input type="hidden" name="userId" data-mx-form-user>
+        <input type="hidden" name="workDate" data-mx-form-date>
+        <input type="hidden" name="month" th:value="${matrixMonth}">
+        <!-- [UX1] 출근/퇴근을 각 줄로 — 좁은 모달에서 한 row에 두면 겹쳐 깨짐 -->
+        <label class="field">출근 시각
+          <input type="time" name="checkIn" data-mx-form-in>
+        </label>
+        <label class="field">퇴근 시각
+          <input type="time" name="checkOut" data-mx-form-out>
+        </label>
+        <label class="field">상태
+          <select name="status" data-mx-form-status required>
+            <option value="NORMAL">정상</option>
+            <option value="LATE">지각</option>
+            <option value="EARLY_LEAVE">조퇴</option>
+            <option value="ABSENT">결근</option>
+            <option value="REMOTE">재택</option>
+            <option value="OUTSIDE">외근</option>
+          </select>
+        </label>
+        <label class="field">직권 정정 사유 (필수)
+          <textarea class="form-textarea" name="reason" rows="2" required maxlength="500" placeholder="예: 출입기록 대조 결과 정정"></textarea>
+        </label>
+        <div class="schedule-edit-foot">
+          <button class="btn primary" type="submit">직권 정정</button>
+          <button class="rbtn" type="button" data-mx-close>닫기</button>
+        </div>
+      </form>
+      <div class="schedule-edit-foot" th:unless="${canManageHr}">
+        <button class="rbtn" type="button" data-mx-close>닫기</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- [A4/UX3] 월 마감 관리 모달 — 마감 월은 정정 신청/승인·직권 정정·소급 결재 반영 차단 -->
+<div class="schedule-edit-modal" data-settings-modal id="modalMonthLock" hidden th:if="${canManageHr}" data-ws-query-contract="hr-members-matrix-v1-locks" data-ws-query-path="self" data-ws-query-params="lockYm" data-ws-query-context="month-lock-preview" data-ws-query-detached-owner="">
+  <div class="schedule-edit-dialog" role="dialog" aria-modal="true">
+    <div class="schedule-edit-head">
+      <strong>근태 월 마감 관리</strong>
+      <button type="button" data-modal-close aria-label="닫기">×</button>
+    </div>
+    <div class="schedule-edit-body">
+      <p class="muted" style="margin:0 0 10px;font-size:12px;">마감된 월은 정정 신청·승인, 직권 정정, 해당 월로의 휴가/출장 결재 반영이 차단됩니다.</p>
+
+      <strong style="font-size:12px;">마감된 월</strong>
+      <div class="chip-row compact-list" th:if="${!#lists.isEmpty(lockedMonths)}" style="margin:6px 0 12px;">
+        <form th:each="lm : ${lockedMonths}" th:action="@{/hr/attendance/month-unlock}" method="post" class="m-chip chip-ok">
+          <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+          <input type="hidden" name="ym" th:value="${lm}">
+          <b th:text="${lm}">2026-06</b>
+          <input class="mini-input" name="confirmText" placeholder="해제합니다" style="width:88px;" aria-label="해제 확인 문구">
+          <button class="chip-x" type="submit" title="마감 해제">×</button>
+        </form>
+      </div>
+      <p class="muted" th:if="${#lists.isEmpty(lockedMonths)}" style="font-size:12px;margin:4px 0 12px;">마감된 월이 없습니다.</p>
+
+      <strong style="font-size:12px;">마감 실행</strong>
+      <form th:action="@{/hr/members/matrix}" method="get" class="pset-inline-form" style="margin-top:6px;" data-ws-query-filter="lock-preview">
+        <input type="hidden" name="month" th:value="${matrixMonth}" data-ws-query-owner="hr-members-matrix-v1" data-ws-query-state="lock-dialog-month">
+        <label class="field">대상 월<input type="month" name="lockYm" th:value="${lockPreview != null ? lockPreview.ym : defaultLockYm}" required></label>
+        <button class="btn" type="submit">미처리 현황 확인</button>
+      </form><div data-ws-query-region="lock-results">
+
+      <div th:if="${lockPreview != null}" style="margin-top:10px;">
+        <div class="banner err" th:if="${lockPreview.locked}" th:text="|${lockPreview.ym}월은 이미 마감되어 있습니다.|">이미 마감</div>
+        <th:block th:if="${!lockPreview.locked}">
+          <ul class="leave-preview-warns" style="margin-bottom:8px;">
+            <li th:if="${lockPreview.absentCount > 0}" th:text="|미처리 결근 ${lockPreview.absentCount}건 — 마감 후에는 정정할 수 없습니다|">결근</li>
+            <li th:if="${lockPreview.pendingCorrections > 0}" th:text="|미결 근태 정정 ${lockPreview.pendingCorrections}건 — 마감 후에는 승인할 수 없습니다|">정정</li>
+            <li th:if="${lockPreview.pendingLeaves > 0}" th:text="|해당 월에 걸친 미결 휴가 결재 ${lockPreview.pendingLeaves}건 — 마감 후에는 반영할 수 없습니다|">휴가</li>
+            <li th:if="${lockPreview.absentCount == 0 and lockPreview.pendingCorrections == 0 and lockPreview.pendingLeaves == 0}">미처리 건이 없습니다. 마감해도 안전합니다.</li>
+          </ul>
+          <form th:action="@{/hr/attendance/month-lock}" method="post" class="pset-inline-form">
+            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+            <input type="hidden" name="ym" th:value="${lockPreview.ym}">
+            <label class="field">확인 문구 (마감합니다)<input name="confirmText" placeholder="마감합니다" required autocomplete="off"></label>
+            <button class="btn primary" type="submit" th:text="|${lockPreview.ym}월 마감|">마감</button>
+          </form>
+        </th:block>
+      </div>
+
+      <details style="margin-top:12px;">
+        <summary style="font-size:12px;font-weight:900;cursor:pointer;">마감/해제 이력</summary>
+        <div class="table-scroll" style="max-height:180px;margin-top:6px;">
+          <table class="rt board-table">
+            <thead><tr><th>일시</th><th>월</th><th>동작</th><th>처리자</th></tr></thead>
+            <tbody>
+              <tr class="empty-tr" th:if="${#lists.isEmpty(lockEvents)}"><td colspan="4">이력이 없습니다.</td></tr>
+              <tr th:each="ev : ${lockEvents}">
+                <td><span class="date-mono" th:text="${#temporals.format(ev.createdAt, 'yyyy-MM-dd HH:mm')}">일시</span></td>
+                <td th:text="${ev.ym}">2026-06</td>
+                <td><span class="hcal-chip" th:classappend="${ev.action == 'LOCK'} ? 'pub' : 'com'"
+                          th:text="${ev.action == 'LOCK' ? '마감' : '해제'}">마감</span></td>
+                <td th:text="${ev.actedByName ?: '-'}">처리자</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </details>
+    
+</div></div>
+    <div class="schedule-edit-foot">
+      <button class="rbtn" type="button" data-modal-close>닫기</button>
+    </div>
+  </div>
+</div>
+
+<script th:src="@{/js/worksystem-att-matrix.js}"></script>
+<script th:src="@{/js/worksystem-settings-modal.js}"></script>
+<script th:if="${lockPreview != null}">
+/* lockYm 확인 후 리다이렉트로 돌아오면 모달 자동 오픈 */
+document.addEventListener('DOMContentLoaded', function () {
+  var m = document.getElementById('modalMonthLock');
+  if (m) m.hidden = false;
+});
+</script>
+</body>
+</html>

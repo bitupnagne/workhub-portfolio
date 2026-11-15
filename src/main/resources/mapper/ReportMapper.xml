@@ -1,0 +1,328 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.portfolio.worksystem.mapper.ReportMapper">
+
+    <insert id="ensureWeekLock">
+        INSERT INTO report_week_locks(week_key) VALUES(#{weekKey})
+        ON DUPLICATE KEY UPDATE week_key = VALUES(week_key)
+    </insert>
+    <select id="lockWeek" resultType="string">
+        SELECT week_key FROM report_week_locks WHERE week_key = #{weekKey} FOR UPDATE
+    </select>
+    <select id="findProjectActivities" resultType="ReportProjectActivity">
+        SELECT id, project_id, task_id, report_user_id, report_team_id, event_type, summary,
+               project_name, task_title, task_status, progress, due_date, occurred_at
+        FROM project_task_activity
+        WHERE report_user_id = #{userId} AND occurred_at &gt;= #{start} AND occurred_at &lt; #{end}
+        ORDER BY occurred_at, id
+    </select>
+    <select id="findProjectItem" resultType="ReportItem">
+        SELECT * FROM report_items WHERE weekly_report_id = #{reportId} AND source_task_id = #{taskId}
+    </select>
+    <insert id="upsertProjectItem" parameterType="ReportItem">
+        INSERT INTO report_items(weekly_report_id, content, due_date, status, cycle, display_order,
+            source_project_id, source_task_id, source_team_id, source_project_name,
+            source_activity_id, project_progress, project_summary)
+        VALUES(#{weeklyReportId}, #{content}, #{dueDate}, #{status}, #{cycle}, #{displayOrder},
+            #{sourceProjectId}, #{sourceTaskId}, #{sourceTeamId}, #{sourceProjectName},
+            #{sourceActivityId}, #{projectProgress}, #{projectSummary})
+        ON DUPLICATE KEY UPDATE content = VALUES(content), due_date = VALUES(due_date), status = VALUES(status),
+            source_project_name = VALUES(source_project_name), source_activity_id = VALUES(source_activity_id),
+            project_progress = VALUES(project_progress), project_summary = VALUES(project_summary)
+    </insert>
+    <update id="updateProjectNote">
+        UPDATE report_items SET project_note = #{note} WHERE id = #{itemId} AND source_task_id IS NOT NULL
+    </update>
+    <delete id="deleteManualItemsByReportId">
+        DELETE FROM report_items WHERE weekly_report_id = #{reportId} AND source_task_id IS NULL
+    </delete>
+    <select id="countSubmittedProjectTeams" resultType="int">
+        SELECT COUNT(DISTINCT ri.source_team_id)
+        FROM report_items ri
+        JOIN team_weekly_status tws ON tws.team_id = ri.source_team_id
+            AND tws.week_key = #{weekKey} AND tws.submitted = TRUE
+        WHERE ri.weekly_report_id = #{reportId} AND ri.source_task_id IS NOT NULL
+    </select>
+
+    <select id="findReport" resultType="WeeklyReport">
+        SELECT id, user_id, week_key, submitted, submitted_at
+        FROM weekly_reports
+        WHERE user_id = #{userId}
+          AND week_key = #{weekKey}
+    </select>
+
+    <insert id="insertReport" parameterType="WeeklyReport" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO weekly_reports(user_id, week_key, submitted)
+        VALUES(#{userId}, #{weekKey}, FALSE)
+    </insert>
+
+    <select id="findReportById" resultType="WeeklyReport">
+        SELECT id, user_id, week_key, submitted, submitted_at
+        FROM weekly_reports
+        WHERE id = #{reportId}
+    </select>
+
+    <select id="countItemsByReportId" resultType="int">
+        SELECT COUNT(*) FROM report_items WHERE weekly_report_id = #{reportId}
+    </select>
+
+    <select id="maxItemOrder" resultType="int">
+        SELECT COALESCE(MAX(display_order), 0) FROM report_items WHERE weekly_report_id = #{reportId}
+    </select>
+
+    <select id="maxItemOrderByStatus" resultType="int">
+        SELECT COALESCE(MAX(display_order), 0)
+        FROM report_items
+        WHERE weekly_report_id = #{reportId}
+          AND status = #{status}
+    </select>
+
+    <select id="maxTeamItemOrderByStatus" resultType="int">
+        SELECT COALESCE(MAX(ri.display_order), 0)
+        FROM report_items ri
+        JOIN weekly_reports wr ON wr.id = ri.weekly_report_id
+        JOIN users u ON u.id = wr.user_id
+        WHERE (CASE WHEN ri.source_task_id IS NOT NULL THEN ri.source_team_id ELSE u.team_id END) = #{teamId}
+          AND wr.week_key = #{weekKey}
+          AND wr.submitted = TRUE
+          AND ri.status = #{status}
+    </select>
+
+    <select id="findItemsByReportId" resultType="ReportItem">
+        SELECT ri.*, wr.user_id, u.name AS member_name, CASE WHEN ri.source_task_id IS NOT NULL THEN ri.source_team_id ELSE u.team_id END AS team_id, t.name AS team_name
+        FROM report_items ri
+        JOIN weekly_reports wr ON wr.id = ri.weekly_report_id
+        JOIN users u ON u.id = wr.user_id
+        LEFT JOIN teams t ON t.id = CASE WHEN ri.source_task_id IS NOT NULL THEN ri.source_team_id ELSE u.team_id END
+        WHERE ri.weekly_report_id = #{reportId}
+        ORDER BY FIELD(ri.status, 'NEW', 'CONTINUE', 'DONE'), ri.display_order, ri.id
+    </select>
+
+    <select id="findItemsByReportIdAndStatus" resultType="ReportItem">
+        SELECT ri.*, wr.user_id, u.name AS member_name, CASE WHEN ri.source_task_id IS NOT NULL THEN ri.source_team_id ELSE u.team_id END AS team_id, t.name AS team_name
+        FROM report_items ri
+        JOIN weekly_reports wr ON wr.id = ri.weekly_report_id
+        JOIN users u ON u.id = wr.user_id
+        LEFT JOIN teams t ON t.id = CASE WHEN ri.source_task_id IS NOT NULL THEN ri.source_team_id ELSE u.team_id END
+        WHERE ri.weekly_report_id = #{reportId}
+          AND ri.status = #{status}
+        ORDER BY ri.display_order, ri.id
+    </select>
+
+    <select id="findSubmittedItemsByTeamAndStatus" resultType="ReportItem">
+        SELECT ri.*, wr.user_id, u.name AS member_name, CASE WHEN ri.source_task_id IS NOT NULL THEN ri.source_team_id ELSE u.team_id END AS team_id, t.name AS team_name
+        FROM report_items ri
+        JOIN weekly_reports wr ON wr.id = ri.weekly_report_id
+        JOIN users u ON u.id = wr.user_id
+        LEFT JOIN teams t ON t.id = CASE WHEN ri.source_task_id IS NOT NULL THEN ri.source_team_id ELSE u.team_id END
+        WHERE (CASE WHEN ri.source_task_id IS NOT NULL THEN ri.source_team_id ELSE u.team_id END) = #{teamId}
+          AND wr.week_key = #{weekKey}
+          AND wr.submitted = TRUE
+          AND ri.status = #{status}
+        ORDER BY ri.display_order, u.name, ri.id
+    </select>
+
+    <select id="findDetailsByItemId" resultType="ReportItemDetail">
+        SELECT id, report_item_id, text, due_date, cycle, display_order
+        FROM report_item_details
+        WHERE report_item_id = #{itemId}
+        ORDER BY display_order, id
+    </select>
+
+    <select id="findItemWithOwner" resultType="ReportItem">
+        SELECT ri.*, wr.user_id, wr.week_key, CASE WHEN ri.source_task_id IS NOT NULL THEN ri.source_team_id ELSE u.team_id END AS team_id, u.name AS member_name, t.name AS team_name
+        FROM report_items ri
+        JOIN weekly_reports wr ON wr.id = ri.weekly_report_id
+        JOIN users u ON u.id = wr.user_id
+        LEFT JOIN teams t ON t.id = CASE WHEN ri.source_task_id IS NOT NULL THEN ri.source_team_id ELSE u.team_id END
+        WHERE ri.id = #{itemId}
+    </select>
+
+    <select id="findDetailWithOwner" resultType="ReportItemDetail">
+        SELECT rid.*
+        FROM report_item_details rid
+        WHERE rid.id = #{detailId}
+    </select>
+
+    <insert id="insertItem" parameterType="ReportItem" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO report_items(weekly_report_id, content, due_date, cycle, status, display_order)
+        VALUES(#{weeklyReportId}, #{content}, #{dueDate}, #{cycle}, #{status}, #{displayOrder})
+    </insert>
+
+    <update id="updateItem" parameterType="ReportItem">
+        UPDATE report_items
+        SET content = #{content},
+            due_date = #{dueDate},
+            cycle = #{cycle},
+            status = #{status},
+            display_order = #{displayOrder}
+        WHERE id = #{id}
+    </update>
+
+    <update id="updateItemStatusAndOrder">
+        UPDATE report_items
+        SET status = #{status}, display_order = #{displayOrder}
+        WHERE id = #{itemId}
+    </update>
+
+    <update id="updateItemOrder">
+        UPDATE report_items
+        SET display_order = #{displayOrder}
+        WHERE id = #{itemId}
+    </update>
+
+    <delete id="deleteItem">
+        DELETE FROM report_items WHERE id = #{itemId}
+    </delete>
+
+    <delete id="deleteItemsByReportId">
+        DELETE FROM report_items WHERE weekly_report_id = #{reportId}
+    </delete>
+
+    <select id="maxDetailOrder" resultType="int">
+        SELECT COALESCE(MAX(display_order), 0) FROM report_item_details WHERE report_item_id = #{itemId}
+    </select>
+
+    <insert id="insertDetail" parameterType="ReportItemDetail" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO report_item_details(report_item_id, text, due_date, cycle, display_order)
+        VALUES(#{reportItemId}, #{text}, #{dueDate}, #{cycle}, #{displayOrder})
+    </insert>
+
+    <update id="updateDetail" parameterType="ReportItemDetail">
+        UPDATE report_item_details
+        SET text = #{text},
+            due_date = #{dueDate},
+            cycle = #{cycle},
+            display_order = #{displayOrder}
+        WHERE id = #{id}
+    </update>
+
+    <delete id="deleteDetail">
+        DELETE FROM report_item_details WHERE id = #{detailId}
+    </delete>
+
+    <update id="submitReport">
+        UPDATE weekly_reports
+        SET submitted = TRUE, submitted_at = NOW()
+        WHERE id = #{reportId}
+    </update>
+
+    <update id="recallReport">
+        UPDATE weekly_reports
+        SET submitted = FALSE, submitted_at = NULL
+        WHERE id = #{reportId}
+    </update>
+
+    <update id="markReportDraft">
+        UPDATE weekly_reports
+        SET submitted = FALSE, submitted_at = NULL
+        WHERE id = #{reportId}
+    </update>
+
+    <select id="findTeamStatus" resultType="TeamWeeklyStatus">
+        SELECT id, team_id, week_key, submitted, submitted_at
+        FROM team_weekly_status
+        WHERE team_id = #{teamId}
+          AND week_key = #{weekKey}
+    </select>
+
+    <insert id="upsertTeamStatus">
+        INSERT INTO team_weekly_status(team_id, week_key, submitted, submitted_at)
+        VALUES(#{teamId}, #{weekKey}, #{submitted}, CASE WHEN #{submitted} THEN NOW() ELSE NULL END)
+        ON DUPLICATE KEY UPDATE submitted = VALUES(submitted), submitted_at = VALUES(submitted_at)
+    </insert>
+
+    <select id="isWeekConfirmed" resultType="boolean">
+        SELECT COALESCE((SELECT confirmed FROM weekly_confirmations WHERE week_key = #{weekKey}), FALSE)
+    </select>
+
+    <insert id="upsertWeekConfirmation">
+        INSERT INTO weekly_confirmations(week_key, confirmed, confirmed_at, confirmed_by)
+        VALUES(#{weekKey}, TRUE, NOW(), #{confirmedBy})
+        ON DUPLICATE KEY UPDATE confirmed = TRUE, confirmed_at = NOW(), confirmed_by = #{confirmedBy}
+    </insert>
+
+    <update id="cancelWeekConfirmation">
+        UPDATE weekly_confirmations
+        SET confirmed = FALSE, confirmed_at = NULL, confirmed_by = NULL
+        WHERE week_key = #{weekKey}
+    </update>
+
+    <select id="findLatestWeekKey" resultType="string">
+        SELECT COALESCE(MAX(wr.week_key), '2026-W14')
+        FROM weekly_reports wr
+        JOIN report_items ri ON ri.weekly_report_id = wr.id
+    </select>
+
+    <select id="findWeeksWithData" resultType="string">
+        SELECT DISTINCT wr.week_key
+        FROM weekly_reports wr
+        JOIN report_items ri ON ri.weekly_report_id = wr.id
+        ORDER BY wr.week_key
+    </select>
+
+    <select id="findSubmittedItemsByTeam" resultType="ReportItem">
+        SELECT ri.*, wr.user_id, u.name AS member_name, CASE WHEN ri.source_task_id IS NOT NULL THEN ri.source_team_id ELSE u.team_id END AS team_id, t.name AS team_name
+        FROM report_items ri
+        JOIN weekly_reports wr ON wr.id = ri.weekly_report_id
+        JOIN users u ON u.id = wr.user_id
+        LEFT JOIN teams t ON t.id = CASE WHEN ri.source_task_id IS NOT NULL THEN ri.source_team_id ELSE u.team_id END
+        WHERE (CASE WHEN ri.source_task_id IS NOT NULL THEN ri.source_team_id ELSE u.team_id END) = #{teamId}
+          AND wr.week_key = #{weekKey}
+          AND wr.submitted = TRUE
+        ORDER BY FIELD(ri.status, 'NEW', 'CONTINUE', 'DONE'), ri.display_order, u.name, ri.id
+    </select>
+
+    <select id="findAdminItems" resultType="ReportItem">
+        SELECT ri.*, wr.user_id, u.name AS member_name, CASE WHEN ri.source_task_id IS NOT NULL THEN ri.source_team_id ELSE u.team_id END AS team_id, t.name AS team_name
+        FROM report_items ri
+        JOIN weekly_reports wr ON wr.id = ri.weekly_report_id
+        JOIN users u ON u.id = wr.user_id
+        LEFT JOIN teams t ON t.id = CASE WHEN ri.source_task_id IS NOT NULL THEN ri.source_team_id ELSE u.team_id END
+        JOIN team_weekly_status tws ON tws.team_id = t.id AND tws.week_key = wr.week_key AND tws.submitted = TRUE
+        WHERE wr.week_key = #{weekKey}
+          AND wr.submitted = TRUE
+        ORDER BY t.display_order, FIELD(ri.status, 'NEW', 'CONTINUE', 'DONE'), ri.display_order, u.name, ri.id
+    </select>
+
+    <select id="search" resultType="SearchResult">
+        SELECT * FROM (
+            SELECT wr.week_key, u.id AS user_id, t.name AS team_name, u.name AS member_name, ri.id AS item_id,
+                   ri.content, NULL AS parent_content, 'main' AS type, ri.status, ri.due_date, ri.cycle
+            FROM report_items ri
+            JOIN weekly_reports wr ON wr.id = ri.weekly_report_id
+            JOIN users u ON u.id = wr.user_id
+            LEFT JOIN teams t ON t.id = CASE WHEN ri.source_task_id IS NOT NULL THEN ri.source_team_id ELSE u.team_id END
+            WHERE (#{weekKey} IS NULL OR wr.week_key = #{weekKey})
+              AND (#{teamId} IS NULL OR (CASE WHEN ri.source_task_id IS NOT NULL THEN ri.source_team_id ELSE u.team_id END) = #{teamId})
+              AND (#{userId} IS NULL OR u.id = #{userId})
+              AND (#{query} IS NULL OR #{query} = ''
+                   OR LOWER(ri.content) LIKE CONCAT('%', LOWER(#{query}), '%')
+                   OR LOWER(u.name) LIKE CONCAT('%', LOWER(#{query}), '%'))
+            UNION ALL
+            SELECT wr.week_key, u.id AS user_id, t.name AS team_name, u.name AS member_name, ri.id AS item_id,
+                   rid.text AS content, ri.content AS parent_content, 'sub' AS type, ri.status, rid.due_date, rid.cycle
+            FROM report_item_details rid
+            JOIN report_items ri ON ri.id = rid.report_item_id
+            JOIN weekly_reports wr ON wr.id = ri.weekly_report_id
+            JOIN users u ON u.id = wr.user_id
+            LEFT JOIN teams t ON t.id = CASE WHEN ri.source_task_id IS NOT NULL THEN ri.source_team_id ELSE u.team_id END
+            WHERE (#{weekKey} IS NULL OR wr.week_key = #{weekKey})
+              AND (#{teamId} IS NULL OR (CASE WHEN ri.source_task_id IS NOT NULL THEN ri.source_team_id ELSE u.team_id END) = #{teamId})
+              AND (#{userId} IS NULL OR u.id = #{userId})
+              AND (#{query} IS NOT NULL AND #{query} &lt;&gt; '' AND LOWER(rid.text) LIKE CONCAT('%', LOWER(#{query}), '%'))
+        ) s
+        ORDER BY s.week_key DESC, s.member_name, s.type
+    </select>
+
+    <insert id="upsertSnapshot">
+        INSERT INTO weekly_report_snapshots(week_key, snapshot_html, created_by)
+        VALUES(#{weekKey}, #{snapshotHtml}, #{createdBy})
+        ON DUPLICATE KEY UPDATE snapshot_html = VALUES(snapshot_html), created_by = VALUES(created_by), created_at = NOW()
+    </insert>
+
+    <insert id="insertAuditLog">
+        INSERT INTO report_audit_logs(week_key, actor_user_id, action, description)
+        VALUES(#{weekKey}, #{actorUserId}, #{action}, #{description})
+    </insert>
+</mapper>

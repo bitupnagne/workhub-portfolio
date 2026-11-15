@@ -1,0 +1,18 @@
+ARG RUNTIME_BASE_IMAGE
+FROM ${RUNTIME_BASE_IMAGE}
+WORKDIR /app
+ARG JAR_SHA256
+COPY target/*.jar /app/app.jar
+RUN test "${#JAR_SHA256}" -eq 64 \
+    && printf '%s  /app/app.jar\n' "$JAR_SHA256" | sha256sum -c - \
+    && java -version 2>&1 | grep -Eq 'version "21[.]'
+USER 10001:10001
+ENV JAVA_OPTS="" \
+    SERVER_PORT=8080 \
+    PROFILE_IMAGE_DIR=/app/uploads/profile-images \
+    TRIP_RECEIPT_DIR=/app/uploads/trip-receipts \
+    SIGNATURE_IMAGE_DIR=/app/uploads/signatures \
+    NOTICE_IMAGE_DIR=/app/uploads/notice-images \
+    APP_RELEASE_DIR=/app/releases
+EXPOSE 8080
+ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar /app/app.jar"]

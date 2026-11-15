@@ -1,0 +1,15 @@
+.project-report-guide { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin:0 0 16px; padding:14px 16px; border:1px solid var(--border); border-radius:var(--radius-lg,10px); background:var(--surface-2); color:var(--text-2); line-height:1.6; font-size:13px; }
+.project-report-guide p { margin:0; }
+.project-report-source { display:flex; align-items:center; flex-wrap:wrap; gap:6px 10px; margin-top:7px; font-size:12px; color:var(--text-3); }
+.project-report-source a { color:var(--nav-hover-text,var(--brand-dark)); text-decoration:underline; text-underline-offset:3px; }
+.project-report-badge { padding:2px 7px; border-radius:var(--radius-pill,999px); background:var(--brand-light); color:var(--on-brand-light); font-weight:600; }
+.project-report-summary { margin-top:8px; white-space:pre-line; overflow-wrap:anywhere; line-height:1.7; font-size:12px; color:var(--text-2); }
+.project-report-note { display:grid; gap:3px; margin-top:10px; font-size:12px; white-space:pre-line; overflow-wrap:anywhere; }
+.project-report-note-editor { padding:10px 0; }
+.project-report-note-editor summary { cursor:pointer; color:var(--nav-hover-text,var(--brand-dark)); font-size:12px; }
+.project-report-note-editor form { display:grid; gap:8px; margin-top:10px; }
+.project-report-note-editor textarea { width:100%; resize:vertical; min-height:72px; font:inherit; }
+.project-report-note-editor .rbtn { justify-self:start; }
+.project-report-note-editor label { font-size:12px; color:var(--text-2); }
+@media (max-width:600px) { .project-report-guide { padding:12px; } .project-report-source { align-items:flex-start; } }
+@media print { .project-report-source { font-size:9pt; } .project-report-summary,.project-report-note { font-size:9pt; line-height:1.5; color:#222; } .project-report-badge { background:none; color:#333; padding:0; } }

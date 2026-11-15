@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title th:text="${title}">프로젝트 관리</title>
+  <link rel="icon" type="image/svg+xml" th:href="@{/img/AppLogoMini.svg}">
+  <link rel="stylesheet" th:href="@{/css/worksystem.css}"><link rel="stylesheet" th:href="@{/css/worksystem-projects.css}">
+</head>
+<body><div class="app"><div th:replace="~{fragments/app :: sidebar}"></div><main>
+  <div th:replace="~{fragments/app :: topbar}"></div>
+  <div class="content pm-root" data-project-root>
+    <div class="banner ok" th:if="${message}" th:text="${message}" role="status"></div>
+    <div class="banner err" th:if="${error}" th:text="${error}" role="alert" tabindex="-1" data-project-error></div>
+    <header class="pm-heading">
+      <div><span class="pm-eyebrow">함께 진행하는 업무</span><h1>프로젝트 관리 <span class="pm-count" th:text="${#lists.size(projects)}">0</span></h1><p>담당 업무와 자료를 한곳에 모으고, 작업 기록을 이번 주 보고로 연결하세요.</p></div>
+      <a class="rbtn" th:href="@{/report/my}" th:if="${!hiddenMenus.contains('reports') and !hiddenMenus.contains('report.my')}">내 주간보고 보기 <span aria-hidden="true">↗</span></a>
+    </header>
+    <details class="pm-editor" th:open="${error != null}">
+      <summary class="pm-editor-summary"><span><b aria-hidden="true">＋</b> 프로젝트 만들기</span><span class="pm-muted">목표와 함께할 사람 정하기</span></summary>
+      <div class="pm-editor-body"><div th:replace="~{projects/fragments :: projectForm(@{/projects}, '프로젝트 만들기')}"></div></div>
+    </details>
+    <section class="pm-projects-section" aria-label="참여 프로젝트" data-project-filter-root>
+      <div class="pm-toolbar">
+        <div class="ws-segmented pm-filter" role="group" aria-label="프로젝트 상태 필터">
+          <button type="button" class="active" aria-pressed="true" data-project-filter="ALL">전체</button>
+          <button type="button" aria-pressed="false" data-project-filter="ACTIVE">진행 중</button>
+          <button type="button" aria-pressed="false" data-project-filter="COMPLETED">완료</button>
+          <button type="button" aria-pressed="false" data-project-filter="ARCHIVED">보관</button>
+        </div>
+        <form class="pm-search" th:action="@{/projects}" method="get" role="search"><label for="pm-project-search" class="pm-sr-only">프로젝트 검색</label><input id="pm-project-search" type="search" name="q" th:value="${q}" placeholder="프로젝트 이름 검색" maxlength="160"><button class="rbtn" type="submit">검색</button></form>
+      </div>
+      <div class="pm-project-grid">
+        <a class="pm-project-card" th:each="item : ${projects}" th:href="@{/projects/{id}(id=${item.id})}" th:attr="data-project-status=${item.status}">
+          <div class="pm-card-top"><span class="pm-project-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M3 10h18M9 10v10"/></svg></span><span class="pm-status" th:attr="data-status=${item.status}" th:text="${item.statusLabel}">진행 중</span></div>
+          <h2 th:text="${item.name}">프로젝트명</h2><p class="pm-project-description" th:text="${#strings.isEmpty(item.description) ? '프로젝트의 목표와 업무를 함께 정리해보세요.' : item.description}">프로젝트 소개</p>
+          <div class="pm-progress-label"><span>평균 진척도</span><b th:text="${item.progress} + '%'">0%</b></div>
+          <progress class="pm-progress" max="100" th:value="${item.progress}" th:aria-label="${item.name + ' 평균 진척도'}">진척도</progress>
+          <div class="pm-project-counts"><span th:text="|업무 ${item.doneTaskCount} / ${item.taskCount} 완료|">업무 0 / 0 완료</span><span th:if="${item.overdueTaskCount > 0}" class="pm-overdue" th:text="|지연 ${item.overdueTaskCount}건|">지연</span></div>
+          <div class="pm-card-footer"><span><b th:text="${item.ownerName}">책임자</b><small th:text="|참여 ${item.memberCount}명|">참여자</small></span><time th:if="${item.dueDate != null}" th:text="${item.dueDate}">목표 완료일</time><span th:unless="${item.dueDate != null}" class="pm-muted">기한 미지정</span></div>
+        </a>
+      </div>
+      <div class="pm-empty" th:if="${#lists.isEmpty(projects)}"><span class="pm-empty-icon" aria-hidden="true">＋</span><h2 th:text="${!#strings.isEmpty(q) ? '검색 결과가 없습니다' : '첫 프로젝트를 함께 시작해보세요'}">참여 프로젝트가 없습니다</h2><p th:text="${!#strings.isEmpty(q) ? '검색어를 바꾸거나 전체 프로젝트를 확인하세요.' : '위의 프로젝트 만들기에서 목표와 참여자를 정하면 업무를 나누어 진행할 수 있습니다.'}">프로젝트 안내</p><a class="rbtn" th:if="${!#strings.isEmpty(q)}" th:href="@{/projects}">전체 프로젝트</a></div>
+      <div class="pm-empty" data-project-filter-empty hidden><h2>해당 상태의 프로젝트가 없습니다</h2><p>다른 상태를 선택해 참여 중인 프로젝트를 확인하세요.</p></div>
+      <p class="pm-help pm-list-note">참여 중인 프로젝트만 표시됩니다. 프로젝트의 작업 기록은 해당 주의 주간보고 초안에 자동으로 모입니다.</p>
+    </section>
+  </div>
+</main></div><script th:src="@{/js/worksystem-projects.js}"></script></body>
+</html>

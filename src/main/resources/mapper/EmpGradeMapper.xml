@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.portfolio.worksystem.mapper.EmpGradeMapper">
+
+    <resultMap id="EmpGradeMap" type="EmpGrade">
+        <id property="id" column="id"/>
+        <result property="parentId" column="parent_id"/>
+        <result property="name" column="name"/>
+        <result property="displayOrder" column="display_order"/>
+        <result property="active" column="active"/>
+        <result property="userCount" column="user_count"/>
+    </resultMap>
+
+    <select id="findAllWithUserCount" resultMap="EmpGradeMap">
+        SELECT g.id, g.parent_id, g.name, g.display_order, g.active,
+               (SELECT COUNT(*) FROM users u WHERE u.grade_id = g.id AND u.active = TRUE) AS user_count
+        FROM emp_grades g
+        ORDER BY g.display_order, g.id
+    </select>
+
+    <select id="findActiveOrdered" resultMap="EmpGradeMap">
+        SELECT g.id, g.parent_id, g.name, g.display_order, g.active, 0 AS user_count
+        FROM emp_grades g
+        WHERE g.active = TRUE
+        ORDER BY g.display_order, g.id
+    </select>
+
+    <select id="findById" resultMap="EmpGradeMap">
+        SELECT g.id, g.parent_id, g.name, g.display_order, g.active, 0 AS user_count
+        FROM emp_grades g
+        WHERE g.id = #{id}
+    </select>
+
+    <select id="findGradeNameByUserId" resultType="string">
+        SELECT g.name
+        FROM users u
+        JOIN emp_grades g ON g.id = u.grade_id
+        WHERE u.id = #{userId}
+    </select>
+
+</mapper>

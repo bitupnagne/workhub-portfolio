@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  [LOG-1] 파일 로깅 정책 — 일별 롤링 + 월별 tar.gz 아카이브
+
+   application.log                 당일치(활성)
+   application.yyyy-MM-dd.log      자정에 롤링된 일별 파일
+   yyyy/application-yyyy-MM.tar.gz LogArchiveService가 매월 1일 묶는 월별 아카이브
+
+  주의 2가지:
+   1) systemd 유닛이 StandardOutput=append:<같은 파일> 이면 writer가 둘이 되어,
+      롤오버로 파일명이 바뀌는 순간 systemd는 옛 inode에 계속 써서 로그가 유실된다.
+      운영 유닛은 StandardOutput=journal 로 두고 이 파일은 Logback이 단독 소유해야 한다.
+   2) maxHistory는 아카이브 잡이 실패했을 때의 안전망이다(90일). 정상 흐름에서는
+      아카이브 잡이 먼저 원본을 tar로 걷어가므로 여기까지 오지 않는다.
+      아카이브 산출물은 yyyy/ 하위라 fileNamePattern에 걸리지 않아 삭제 대상이 아니다.
+-->
+<configuration>
+    <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+    <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
+
+    <!-- 운영: /var/log/worksystem (application-prod.yml), 로컬: ./logs -->
+    <springProperty scope="context" name="logDir" source="app.log.dir" defaultValue="logs"/>
+
+    <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${logDir}/application.log</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>${logDir}/application.%d{yyyy-MM-dd}.log</fileNamePattern>
+            <maxHistory>90</maxHistory>
+        </rollingPolicy>
+        <encoder>
+            <pattern>${FILE_LOG_PATTERN}</pattern>
+            <charset>${FILE_LOG_CHARSET}</charset>
+        </encoder>
+    </appender>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="FILE"/>
+    </root>
+</configuration>

@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title th:text="${title}">대시보드</title>
+  <link rel="icon" type="image/svg+xml" th:href="@{/img/AppLogoMini.svg}">
+  <link rel="stylesheet" th:href="@{/css/worksystem.css}">
+</head>
+<body>
+<div class="app">
+  <div th:replace="~{fragments/app :: sidebar}"></div>
+  <main>
+    <div th:replace="~{fragments/app :: topbar}"></div>
+    <div class="content dashboard-page" data-ws-query-contract="dashboard-scope-v1" data-ws-query-path="self" data-ws-query-params="includeContractors" th:attr="data-ws-query-context=${canManageOrganization}">
+      <div class="dashboard-head">
+        <div>
+          <h2>업무 대시보드</h2>
+          <p th:text="${todayLabel + ' · ' + weekLabel + ' (' + weekPeriod + ')'}">2026.05.15 금요일 · 2026년 20주차</p>
+        </div>
+        <div class="dash-head-actions">
+          <form class="dash-toggle-form" th:action="@{/dashboard}" method="get" data-ws-query-filter="scope-filter">
+            <input type="hidden" name="month" th:value="${dashboardMonthValue}" data-ws-query-owner="dashboard-calendar-v1" data-ws-query-state="scope-month-context">
+            <input type="hidden" name="includeContractors" th:value="${!includeContractors}">
+            <button class="rbtn" type="submit"
+                    th:text="${includeContractors ? '도급 제외' : '도급 포함'}" data-ws-query-state="scope-toggle">도급 제외</button>
+          </form>
+          <a class="dash-due-chip" th:classappend="${weeklyReportDueToday} ? ' due'" th:href="@{/report/my}">
+            <span th:text="${weeklyReportDueToday ? '오늘 주간보고 제출일' : '이번 주 보고 진행'}">오늘 주간보고 제출일</span>
+            <b th:text="${reportSubmitted ? '제출 완료' : '작성 필요'}">작성 필요</b>
+          </a>
+        </div>
+      </div>
+
+      <div class="dash-metric-grid" data-ws-query-region="metrics">
+        <a class="dash-metric total" th:href="@{/admin/users}" th:if="${canManageOrganization}">
+          <span>총 인원</span><strong th:text="${totalEmployees}">0</strong><em>관리 대상</em>
+        </a>
+        <div class="dash-metric total" th:unless="${canManageOrganization}">
+          <span>총 인원</span><strong th:text="${totalEmployees}">0</strong><em>조회 범위</em>
+        </div>
+        <a class="dash-metric total contractor" th:href="@{/admin/users(contractor='true')}" th:if="${canManageOrganization}">
+          <span>도급 인원</span><strong th:text="${contractorCount}">0</strong><em th:text="${includeContractors ? '근태 포함' : '근태 제외'}">근태 포함</em>
+        </a>
+        <div class="dash-metric total contractor" th:unless="${canManageOrganization}">
+          <span>도급 인원</span><strong th:text="${contractorCount}">0</strong><em th:text="${includeContractors ? '근태 포함' : '근태 제외'}">근태 포함</em>
+        </div>
+        <a class="dash-metric work" th:href="@{/hr/attendance}">
+          <span>오늘 근무</span><strong th:text="${workingTodayCount}">0</strong><em th:text="${attendanceRate + '% 출근'}">0% 출근</em>
+        </a>
+        <a class="dash-metric trip" th:href="@{/hr/trips}">
+          <span>출장</span><strong th:text="${tripTodayCount}">0</strong><em th:text="${outsideTodayCount > 0 ? '외근 ' + outsideTodayCount + '명 포함' : '승인 기준'}">승인 기준</em>
+        </a>
+        <a class="dash-metric leave" th:href="@{/hr/leave}">
+          <span>휴가/연차</span><strong th:text="${leaveTodayCount}">0</strong><em>오늘 부재</em>
+        </a>
+        <a class="dash-metric away" th:href="@{/hr/attendance}">
+          <span>부재 합계</span><strong th:text="${unavailableTodayCount}">0</strong><em th:text="${absentTodayCount + '명 결근'}">0명 결근</em>
+        </a>
+        <a class="dash-metric wait" th:href="@{/hr/attendance}">
+          <span>미출근/예정</span><strong th:text="${scheduledTodayCount}">0</strong><em>근태 대기</em>
+        </a>
+      </div>
+
+      <div class="dashboard-main-grid" data-ws-query-region="dashboard-body">
+        <section class="dash-panel calendar-panel" data-ws-query-contract="dashboard-calendar-v1" data-ws-query-path="self" data-ws-query-params="month" th:attr="data-ws-query-context=${includeContractors}">
+          <div class="dash-panel-head calendar-head">
+            <div>
+              <span class="dash-eyebrow">Company Calendar</span>
+              <h3 th:text="${dashboardMonthLabel}" data-ws-query-state="month-title">2026년 5월</h3>
+            </div>
+            <div class="calendar-actions">
+              <a class="rbtn" th:href="@{/dashboard(month=${dashboardPrevMonth},includeContractors=${includeContractors})}" aria-label="이전 달" data-ws-query-state="month-action-0">‹</a>
+              <form class="calendar-month-form" th:action="@{/dashboard}" method="get" data-ws-query-filter="calendar-month">
+                <input type="hidden" name="includeContractors" th:value="${includeContractors}">
+                <input type="month" name="month" th:value="${dashboardMonthValue}" aria-label="달력 월 선택"
+                       onchange="this.form.requestSubmit()">
+              </form>
+              <a class="rbtn" th:href="@{/dashboard(month=${dashboardNextMonth},includeContractors=${includeContractors})}" aria-label="다음 달" data-ws-query-state="month-action-1">›</a>
+              <a class="rbtn acc" th:href="@{/dashboard(month=${dashboardTodayMonth},includeContractors=${includeContractors})}" th:classappend="${dashboardCurrentMonth} ? ' disabled'" data-ws-query-state="month-action-2">오늘</a>
+              <a class="rbtn" th:href="@{/hr/schedules}">일정관리</a>
+            </div>
+          </div>
+          <div class="dash-calendar" data-ws-query-region="calendar-days">
+            <div class="dash-cal-weekday">월</div>
+            <div class="dash-cal-weekday">화</div>
+            <div class="dash-cal-weekday">수</div>
+            <div class="dash-cal-weekday">목</div>
+            <div class="dash-cal-weekday">금</div>
+            <div class="dash-cal-weekday">토</div>
+            <div class="dash-cal-weekday">일</div>
+            <div class="dash-cal-day" th:each="day : ${dashboardCalendarDays}"
+                 th:attr="data-date=${day.date()}"
+                 th:classappend="${(day.inMonth() ? '' : ' other') + (day.saturday() ? ' saturday' : '') + (day.sunday() ? ' sunday' : '') + (day.today() ? ' today' : '')}">
+              <b th:text="${day.date().getDayOfMonth()}">1</b>
+              <span class="dash-today-label" th:if="${day.today()}">오늘</span>
+              <div class="dash-cal-items">
+                <span class="dash-cal-item holiday"
+                      th:each="holiday : ${dashboardHolidays}"
+                      th:if="${holiday.holidayDate == day.date()}">
+                  <span class="dash-cal-item-label" th:text="${holiday.name}">휴무</span>
+                  <span class="dash-cal-tooltip">
+                    <b th:text="${holiday.name}">휴무</b>
+                    <em th:text="${holiday.holidayDate}">날짜</em>
+                    <small>회사 휴무일</small>
+                  </span>
+                </span>
+                <span class="dash-cal-item"
+                      th:each="schedule : ${dashboardSchedules}"
+                      th:if="${!day.date().isBefore(schedule.startAt.toLocalDate()) and !day.date().isAfter(schedule.endAt.toLocalDate())}"
+                      th:style="'--schedule-color:' + ${schedule.color}">
+                  <span class="dash-cal-item-label" th:text="${schedule.title}">일정</span>
+                  <span class="dash-cal-tooltip">
+                    <b th:text="${schedule.title}">일정</b>
+                    <em th:text="|${#temporals.format(schedule.startAt, 'MM-dd HH:mm')} ~ ${#temporals.format(schedule.endAt, 'MM-dd HH:mm')}|">기간</em>
+                    <p th:if="${schedule.description}" th:text="${schedule.description}">설명</p>
+                    <small th:text="|by ${schedule.createdByName ?: '-'}|">by</small>
+                  </span>
+                </span>
+              </div>
+            </div>
+          </div>
+          <!-- 모바일 전용: 선택한 날짜의 일정 아젠다(점 캘린더 하단 리스트) — JS가 채움 -->
+          <div class="m-cal-agenda" data-cal-agenda data-ws-query-region="calendar-agenda"></div>
+        </section>
+
+        <div class="dashboard-side-stack">
+        <section class="dash-panel report-panel">
+          <div class="dash-panel-head">
+            <div>
+              <span class="dash-eyebrow">Weekly Report</span>
+              <h3>주간보고 진행</h3>
+            </div>
+            <a class="rbtn acc" th:href="@{/report/my}">작성</a>
+          </div>
+          <div class="report-meter">
+            <div class="report-meter-ring" th:style="'--p:' + ${reportProgress}">
+              <strong th:text="${reportProgress + '%'}">0%</strong>
+            </div>
+            <div>
+              <b th:text="${reportSubmitted ? '내 보고서 제출 완료' : (weeklyReportDueToday ? '오늘 제출이 필요합니다' : '작성 중인 보고서를 확인하세요')}">오늘 제출이 필요합니다</b>
+              <p th:text="${myReportItemCount + '개 항목 · ' + (weekConfirmed ? '확정 주차' : '수정 가능')}">0개 항목 · 수정 가능</p>
+              <div class="dash-mini-actions">
+                <a th:href="@{/report/my}">내 보고서</a>
+                <a th:if="${currentUser.teamLeader}" th:href="@{/report/team}" th:text="${teamReportSubmitted ? '팀 제출 완료' : '팀 취합'}">팀 취합</a>
+                <a th:if="${canManageWeeklyReport}" th:href="@{/report/admin}" th:text="${collectedTeamCount + '개 팀 취합'}">전체 취합</a>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="dash-panel attendance-panel">
+          <div class="dash-panel-head">
+            <div>
+              <span class="dash-eyebrow">Attendance</span>
+              <h3>오늘 근태 분포</h3>
+            </div>
+            <a class="rbtn" th:href="@{/hr/attendance}">상세</a>
+          </div>
+          <div class="dash-bars">
+            <div class="dash-bar-row"><span>근무</span><div><i class="bar-work" th:style="'width:' + ${totalEmployees == 0 ? 0 : workingTodayCount * 100 / totalEmployees} + '%'"></i></div><b th:text="${workingTodayCount}">0</b></div>
+            <div class="dash-bar-row"><span>출장</span><div><i class="bar-trip" th:style="'width:' + ${totalEmployees == 0 ? 0 : tripTodayCount * 100 / totalEmployees} + '%'"></i></div><b th:text="${tripTodayCount}">0</b></div>
+            <div class="dash-bar-row"><span>휴가</span><div><i class="bar-leave" th:style="'width:' + ${totalEmployees == 0 ? 0 : leaveTodayCount * 100 / totalEmployees} + '%'"></i></div><b th:text="${leaveTodayCount}">0</b></div>
+            <div class="dash-bar-row"><span>예정</span><div><i class="bar-wait" th:style="'width:' + ${totalEmployees == 0 ? 0 : scheduledTodayCount * 100 / totalEmployees} + '%'"></i></div><b th:text="${scheduledTodayCount}">0</b></div>
+          </div>
+        </section>
+
+        <section class="dash-panel movement-panel">
+          <div class="dash-panel-head">
+            <div>
+              <span class="dash-eyebrow">Today</span>
+              <h3>오늘 부재/출장자</h3>
+            </div>
+            <a class="rbtn" th:href="@{/hr/leave}">HR</a>
+          </div>
+          <div class="dash-movement-list">
+            <div class="dash-person" th:each="leave : ${todayLeaves}">
+              <span class="dash-dot leave"></span>
+              <b th:text="${leave.memberName}">홍길동</b>
+              <em th:text="${leave.type.label}">연차</em>
+            </div>
+            <div class="dash-person" th:each="trip : ${todayTrips}">
+              <span class="dash-dot trip"></span>
+              <b th:text="${trip.memberName}">홍길동</b>
+              <em th:text="${trip.destination}">출장지</em>
+            </div>
+            <div class="dash-empty" th:if="${#lists.isEmpty(todayLeaves) and #lists.isEmpty(todayTrips)}">오늘 등록된 부재/출장 일정이 없습니다.</div>
+          </div>
+        </section>
+        </div>
+      </div>
+
+      <section class="dash-panel notice-panel dashboard-bottom-notice">
+        <div class="dash-panel-head">
+          <div>
+            <h3>공지사항</h3>
+          </div>
+          <a class="rbtn" th:href="@{/notices}">목록으로</a>
+        </div>
+        <div class="dash-notice-list">
+          <!-- [UX8] 내용 미리보기 제거 — 제목·작성자·작성일 중심 -->
+          <a class="dash-notice dash-notice-compact" th:each="notice : ${noticeFeed}" th:href="${#strings.isEmpty(notice.linkUrl) ? '/notifications' : notice.linkUrl}" th:classappend="${notice.unread} ? ' unread'">
+            <b>
+              <span th:if="${notice.pollOpen}" class="poll-chip open">투표 진행중</span>
+              <span th:if="${notice.pollClosed}" class="poll-chip closed">투표 종료</span>
+              <span th:text="${notice.title}">공지 제목</span>
+            </b>
+            <em>
+              <span th:text="${notice.senderName ?: '-'}">작성자</span>
+              <span class="dash-notice-dot">·</span>
+              <span th:text="${#temporals.format(notice.createdAt, 'yyyy.MM.dd')}">2026.07.03</span>
+            </em>
+          </a>
+          <div class="dash-empty" th:if="${#lists.isEmpty(noticeFeed)}">등록된 공지사항이 없습니다.</div>
+        </div>
+      </section>
+    </div>
+  </main>
+</div>
+<script>
+/* 모바일 대시보드 캘린더: 날짜 탭 → 하단 아젠다에 해당 일정 표시 (점은 CSS).
+   월 이동/오늘 버튼은 soft-submit이 .content만 교체하므로(인라인 스크립트 재실행 없음)
+   클릭은 document 위임, 초기 렌더는 worksystem:content-updated에서 재실행한다. */
+(() => {
+  const DOW = ['일', '월', '화', '수', '목', '금', '토'];
+
+  const itemsOf = (dayEl) => Array.from(dayEl.querySelectorAll('.dash-cal-item')).map((item) => {
+    const tip = item.querySelector('.dash-cal-tooltip');
+    return {
+      holiday: item.classList.contains('holiday'),
+      color: item.style.getPropertyValue('--schedule-color').trim() || (item.classList.contains('holiday') ? '#dc2626' : '#2563eb'),
+      title: item.querySelector('.dash-cal-item-label')?.textContent.trim() || '',
+      time: tip?.querySelector('em')?.textContent.trim() || '',
+      desc: tip?.querySelector('p')?.textContent.trim() || '',
+      by: tip?.querySelector('small')?.textContent.trim() || ''
+    };
+  });
+
+  const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+  const render = (dayEl) => {
+    const agenda = document.querySelector('[data-cal-agenda]');
+    if (!agenda || !dayEl) return;
+    document.querySelectorAll('.dash-cal-day.m-selected').forEach((d) => d.classList.remove('m-selected'));
+    dayEl.classList.add('m-selected');
+    const date = new Date(dayEl.dataset.date + 'T00:00:00');
+    const head = `${date.getMonth() + 1}월 ${date.getDate()}일 (${DOW[date.getDay()]})`;
+    const items = itemsOf(dayEl);
+    const rows = items.length
+      ? items.map((it) => `
+          <li class="m-agenda-item" style="--c:${esc(it.color)}">
+            <b>${esc(it.title)}</b>
+            ${it.holiday ? '<em>회사 휴무일</em>' : (it.time ? `<em>${esc(it.time)}</em>` : '')}
+            ${it.desc ? `<p>${esc(it.desc)}</p>` : ''}
+            ${!it.holiday && it.by ? `<small>${esc(it.by)}</small>` : ''}
+          </li>`).join('')
+      : '<li class="m-agenda-empty">선택한 날짜에 일정이 없습니다</li>';
+    agenda.innerHTML = `<div class="m-agenda-head">${esc(head)}</div><ul class="m-agenda-list">${rows}</ul>`;
+  };
+
+  const init = () => {
+    if (!document.querySelector('[data-cal-agenda]')) return;
+    render(document.querySelector('.dash-cal-day.today') || document.querySelector('.dash-cal-day[data-date]'));
+  };
+
+  document.addEventListener('click', (event) => {
+    const day = event.target.closest('.dash-cal-day[data-date]');
+    if (day) render(day);
+  });
+  window.addEventListener('worksystem:content-updated', init);
+  init();
+})();
+</script>
+</body>
+</html>

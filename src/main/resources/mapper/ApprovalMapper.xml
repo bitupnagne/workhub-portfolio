@@ -1,0 +1,1025 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.portfolio.worksystem.mapper.ApprovalMapper">
+
+    <select id="findRouteRules" resultType="ApprovalRouteRule">
+        SELECT arr.id, arr.document_type, arr.scope_team_id, scope_team.name AS scope_team_name,
+               arr.requester_level, arr.step_order, arr.approver_type,
+               arr.approver_user_id, u.name AS approver_name,
+               arr.approver_team_id, approver_team.name AS approver_team_name,
+               arr.receiver_team_id, receiver.name AS receiver_team_name,
+               arr.active
+        FROM approval_route_rules arr
+        LEFT JOIN teams scope_team ON scope_team.id = arr.scope_team_id
+        LEFT JOIN users u ON u.id = arr.approver_user_id
+        LEFT JOIN teams approver_team ON approver_team.id = arr.approver_team_id
+        LEFT JOIN teams receiver ON receiver.id = arr.receiver_team_id
+        WHERE arr.document_type = #{documentType}
+          AND arr.scope_team_id IS NULL
+          AND arr.requester_level = #{requesterLevel}
+        ORDER BY arr.step_order, arr.id
+    </select>
+
+    <select id="findRouteRulesByScope" resultType="ApprovalRouteRule">
+        SELECT arr.id, arr.document_type, arr.scope_team_id, scope_team.name AS scope_team_name,
+               arr.requester_level, arr.step_order, arr.approver_type,
+               arr.approver_user_id, u.name AS approver_name,
+               arr.approver_team_id, approver_team.name AS approver_team_name,
+               arr.receiver_team_id, receiver.name AS receiver_team_name,
+               arr.active
+        FROM approval_route_rules arr
+        LEFT JOIN teams scope_team ON scope_team.id = arr.scope_team_id
+        LEFT JOIN users u ON u.id = arr.approver_user_id
+        LEFT JOIN teams approver_team ON approver_team.id = arr.approver_team_id
+        LEFT JOIN teams receiver ON receiver.id = arr.receiver_team_id
+        WHERE arr.document_type = #{documentType}
+          AND arr.requester_level = #{requesterLevel}
+          <choose>
+            <when test="scopeTeamId == null">
+              AND arr.scope_team_id IS NULL
+            </when>
+            <otherwise>
+              AND arr.scope_team_id = #{scopeTeamId}
+            </otherwise>
+          </choose>
+        ORDER BY arr.step_order, arr.id
+    </select>
+
+    <select id="findAllRouteRules" resultType="ApprovalRouteRule">
+        SELECT arr.id, arr.document_type, arr.scope_team_id, scope_team.name AS scope_team_name,
+               arr.requester_level, arr.step_order, arr.approver_type,
+               arr.approver_user_id, u.name AS approver_name,
+               arr.approver_team_id, approver_team.name AS approver_team_name,
+               arr.receiver_team_id,
+               (SELECT GROUP_CONCAT(rt.name ORDER BY rt.name SEPARATOR ', ')
+                FROM approval_route_receivers rr JOIN teams rt ON rt.id = rr.receiver_team_id
+                WHERE rr.rule_id = arr.id) AS receiver_team_name,
+               arr.active
+        FROM approval_route_rules arr
+        LEFT JOIN teams scope_team ON scope_team.id = arr.scope_team_id
+        LEFT JOIN users u ON u.id = arr.approver_user_id
+        LEFT JOIN teams approver_team ON approver_team.id = arr.approver_team_id
+        ORDER BY FIELD(arr.document_type, 'LEAVE', 'TRIP', 'FLEX_TIME', 'ATTENDANCE_CORRECTION'),
+                 CASE WHEN arr.scope_team_id IS NULL THEN 0 ELSE 1 END,
+                 scope_team.name,
+                 FIELD(arr.requester_level, 'MEMBER', 'TEAM_LEADER', 'DIVISION_LEADER', 'CEO'),
+                 arr.step_order
+    </select>
+
+    <select id="findRouteRule" resultType="ApprovalRouteRule">
+        SELECT arr.id, arr.document_type, arr.scope_team_id, scope_team.name AS scope_team_name,
+               arr.requester_level, arr.step_order, arr.approver_type,
+               arr.approver_user_id, u.name AS approver_name,
+               arr.approver_team_id, approver_team.name AS approver_team_name,
+               arr.receiver_team_id,
+               (SELECT GROUP_CONCAT(rt.name ORDER BY rt.name SEPARATOR ', ')
+                FROM approval_route_receivers rr JOIN teams rt ON rt.id = rr.receiver_team_id
+                WHERE rr.rule_id = arr.id) AS receiver_team_name,
+               arr.active
+        FROM approval_route_rules arr
+        LEFT JOIN teams scope_team ON scope_team.id = arr.scope_team_id
+        LEFT JOIN users u ON u.id = arr.approver_user_id
+        LEFT JOIN teams approver_team ON approver_team.id = arr.approver_team_id
+        WHERE arr.id = #{id}
+    </select>
+
+    <select id="findRouteRuleId" resultType="long">
+        SELECT id FROM approval_route_rules
+        WHERE document_type = #{documentType}
+          AND requester_level = #{requesterLevel}
+          <choose>
+            <when test="scopeTeamId == null">
+              AND scope_team_id IS NULL
+            </when>
+            <otherwise>
+              AND scope_team_id = #{scopeTeamId}
+            </otherwise>
+          </choose>
+          AND step_order = #{stepOrder}
+        LIMIT 1
+    </select>
+
+    <select id="findRouteReceiverTeamIds" resultType="long">
+        SELECT receiver_team_id FROM approval_route_receivers WHERE rule_id = #{ruleId} ORDER BY receiver_team_id
+    </select>
+
+    <delete id="deleteRouteReceivers">
+        DELETE FROM approval_route_receivers WHERE rule_id = #{ruleId}
+    </delete>
+
+    <insert id="insertRouteReceiver">
+        INSERT IGNORE INTO approval_route_receivers(rule_id, receiver_team_id) VALUES(#{ruleId}, #{teamId})
+    </insert>
+
+    <insert id="insertRouteRule" parameterType="ApprovalRouteRule" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO approval_route_rules(document_type, scope_team_id, requester_level, step_order, approver_type, approver_user_id, approver_team_id, receiver_team_id, active)
+        VALUES(#{documentType}, #{scopeTeamId}, #{requesterLevel}, #{stepOrder}, #{approverType}, #{approverUserId}, #{approverTeamId}, #{receiverTeamId}, #{active})
+        ON DUPLICATE KEY UPDATE approver_type = VALUES(approver_type),
+                                approver_user_id = VALUES(approver_user_id),
+                                approver_team_id = VALUES(approver_team_id),
+                                receiver_team_id = VALUES(receiver_team_id),
+                                active = VALUES(active)
+    </insert>
+
+    <update id="updateRouteRule" parameterType="ApprovalRouteRule">
+        UPDATE approval_route_rules
+        SET document_type = #{documentType},
+            scope_team_id = #{scopeTeamId},
+            requester_level = #{requesterLevel},
+            step_order = #{stepOrder},
+            approver_type = #{approverType},
+            approver_user_id = #{approverUserId},
+            approver_team_id = #{approverTeamId},
+            receiver_team_id = #{receiverTeamId},
+            active = #{active}
+        WHERE id = #{id}
+    </update>
+
+    <delete id="deleteRouteRule">
+        DELETE FROM approval_route_rules WHERE id = #{id}
+    </delete>
+
+    <insert id="insertDocumentReceiver">
+        INSERT IGNORE INTO approval_document_receivers(document_type, document_id, receiver_team_id)
+        VALUES(#{documentType}, #{documentId}, #{receiverTeamId})
+    </insert>
+
+    <delete id="deleteDocumentReceivers">
+        DELETE FROM approval_document_receivers
+        WHERE document_type = #{documentType}
+          AND document_id = #{documentId}
+    </delete>
+
+    <select id="findDocumentSnapshot" resultType="ApprovalDocumentSnapshot">
+        SELECT id, document_type, document_id, document_kind, document_title,
+               requester_name, team_name, status_label, snapshot_html,
+               stored_filename, original_filename, content_type, file_size,
+               generated_by, created_at
+        FROM approval_document_snapshots
+        WHERE document_type = #{documentType}
+          AND document_id = #{documentId}
+    </select>
+
+    <select id="findSnapshotsByTeam" resultType="ApprovalDocumentSnapshot">
+        SELECT id, document_type, document_id, document_kind, document_title,
+               requester_name, team_name, status_label, snapshot_html,
+               stored_filename, original_filename, content_type, file_size,
+               generated_by, created_at
+        FROM approval_document_snapshots
+        <where>
+            stored_filename IS NOT NULL AND stored_filename &lt;&gt; ''
+            <if test="teamName != null and teamName != ''">
+                AND team_name = #{teamName}
+            </if>
+        </where>
+        ORDER BY id
+    </select>
+
+    <insert id="insertDocumentSnapshot" parameterType="ApprovalDocumentSnapshot" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO approval_document_snapshots(document_type, document_id, document_kind, document_title,
+                                                requester_name, team_name, status_label, snapshot_html,
+                                                stored_filename, original_filename, content_type, file_size, generated_by)
+        VALUES(#{documentType}, #{documentId}, #{documentKind}, #{documentTitle},
+               #{requesterName}, #{teamName}, #{statusLabel}, #{snapshotHtml},
+               #{storedFilename}, #{originalFilename}, #{contentType}, #{fileSize}, #{generatedBy})
+        ON DUPLICATE KEY UPDATE id = id
+    </insert>
+
+    <update id="updateDocumentSnapshotFile" parameterType="ApprovalDocumentSnapshot">
+        UPDATE approval_document_snapshots
+        SET stored_filename = #{storedFilename},
+            original_filename = #{originalFilename},
+            content_type = #{contentType},
+            file_size = #{fileSize}
+        WHERE id = #{id}
+    </update>
+
+    <update id="updateDocumentSnapshotHtml" parameterType="ApprovalDocumentSnapshot">
+        UPDATE approval_document_snapshots
+        SET snapshot_html = #{snapshotHtml}
+        WHERE id = #{id}
+    </update>
+
+    <select id="existsDocumentReceiver" resultType="boolean">
+        SELECT EXISTS (
+            SELECT 1
+            FROM approval_document_receivers
+            WHERE document_type = #{documentType}
+              AND document_id = #{documentId}
+              AND receiver_team_id = #{teamId}
+        )
+    </select>
+
+    <!-- [R-1] 결재 문서의 신청자 team_id — 같은 팀원 view 권한 검사용 -->
+    <select id="findRequesterTeamId" resultType="java.lang.Long">
+        <choose>
+            <when test="documentType.name() == 'LEAVE' or documentType.name() == 'LEAVE_CANCEL'">
+                SELECT u.team_id FROM leave_requests lr JOIN users u ON u.id = lr.user_id WHERE lr.id = #{documentId}
+            </when>
+            <when test="documentType.name() == 'TRIP'">
+                SELECT u.team_id FROM business_trips bt JOIN users u ON u.id = bt.user_id WHERE bt.id = #{documentId}
+            </when>
+            <when test="documentType.name() == 'FLEX_TIME'">
+                SELECT u.team_id FROM flex_time_requests ft JOIN users u ON u.id = ft.user_id WHERE ft.id = #{documentId}
+            </when>
+            <when test="documentType.name() == 'ATTENDANCE_CORRECTION'">
+                SELECT u.team_id FROM attendance_corrections ac JOIN users u ON u.id = ac.user_id WHERE ac.id = #{documentId}
+            </when>
+            <when test="documentType.name() == 'LOA'">
+                SELECT u.team_id FROM loa_requests r JOIN users u ON u.id = r.user_id WHERE r.id = #{documentId}
+            </when>
+            <otherwise>
+                SELECT NULL
+            </otherwise>
+        </choose>
+    </select>
+
+    <select id="findSteps" resultType="ApprovalStep">
+        SELECT ast.id, ast.document_type, ast.document_id, ast.step_order,
+               ast.approver_user_id, ast.approver_type,
+               COALESCE(ast.approver_name_snapshot, approver.name) AS approver_name,
+               COALESCE(ast.approver_dept_snapshot, approver.dept) AS approver_dept,
+               COALESCE(ast.approver_job_title_snapshot, approver.job_title) AS approver_job_title,
+               ast.delegate_user_id, COALESCE(ast.delegate_name_snapshot, delegate.name) AS delegate_name,
+               ast.status, ast.acted_by, COALESCE(ast.acted_by_name_snapshot, actor.name) AS acted_by_name,
+               ast.acted_at, ast.post_approved_by,
+               COALESCE(ast.post_approved_by_name_snapshot, post_actor.name) AS post_approved_by_name,
+               ast.post_approved_at, ast.rejected_reason
+        FROM approval_steps ast
+        JOIN users approver ON approver.id = ast.approver_user_id
+        LEFT JOIN users delegate ON delegate.id = ast.delegate_user_id
+        LEFT JOIN users actor ON actor.id = ast.acted_by
+        LEFT JOIN users post_actor ON post_actor.id = ast.post_approved_by
+        WHERE ast.document_type = #{documentType}
+          AND ast.document_id = #{documentId}
+        ORDER BY ast.step_order, ast.id
+    </select>
+
+    <select id="findPendingStep" resultType="ApprovalStep">
+        SELECT ast.id, ast.document_type, ast.document_id, ast.step_order,
+               ast.approver_user_id, ast.approver_type,
+               COALESCE(ast.approver_name_snapshot, approver.name) AS approver_name,
+               COALESCE(ast.approver_dept_snapshot, approver.dept) AS approver_dept,
+               COALESCE(ast.approver_job_title_snapshot, approver.job_title) AS approver_job_title,
+               ast.delegate_user_id, COALESCE(ast.delegate_name_snapshot, delegate.name) AS delegate_name,
+               ast.status, ast.acted_by, COALESCE(ast.acted_by_name_snapshot, actor.name) AS acted_by_name,
+               ast.acted_at, ast.post_approved_by,
+               COALESCE(ast.post_approved_by_name_snapshot, post_actor.name) AS post_approved_by_name,
+               ast.post_approved_at, ast.rejected_reason
+        FROM approval_steps ast
+        JOIN users approver ON approver.id = ast.approver_user_id
+        LEFT JOIN users delegate ON delegate.id = ast.delegate_user_id
+        LEFT JOIN users actor ON actor.id = ast.acted_by
+        LEFT JOIN users post_actor ON post_actor.id = ast.post_approved_by
+        WHERE ast.document_type = #{documentType}
+          AND ast.document_id = #{documentId}
+          AND ast.status = 'PENDING'
+        ORDER BY ast.step_order, ast.id
+        LIMIT 1
+    </select>
+
+    <insert id="insertStep" parameterType="ApprovalStep" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO approval_steps(document_type, document_id, step_order,
+                                   approver_user_id, approver_type,
+                                   approver_name_snapshot, approver_dept_snapshot, approver_job_title_snapshot,
+                                   delegate_user_id, delegate_name_snapshot, status)
+        VALUES(#{documentType}, #{documentId}, #{stepOrder},
+               #{approverUserId}, #{approverType},
+               #{approverName}, #{approverDept}, #{approverJobTitle},
+               #{delegateUserId}, #{delegateName}, #{status})
+    </insert>
+
+    <update id="updateStepStatus">
+        UPDATE approval_steps
+        SET status = #{status},
+            acted_by = #{actedBy},
+            acted_by_name_snapshot = (SELECT name FROM users WHERE id = #{actedBy}),
+            acted_at = NOW(),
+            rejected_reason = #{rejectedReason}
+        WHERE id = #{stepId}
+    </update>
+
+    <select id="findPostApprovalStep" resultType="ApprovalStep">
+        SELECT ast.id, ast.document_type, ast.document_id, ast.step_order,
+               ast.approver_user_id, ast.approver_type,
+               COALESCE(ast.approver_name_snapshot, approver.name) AS approver_name,
+               COALESCE(ast.approver_dept_snapshot, approver.dept) AS approver_dept,
+               COALESCE(ast.approver_job_title_snapshot, approver.job_title) AS approver_job_title,
+               ast.delegate_user_id, COALESCE(ast.delegate_name_snapshot, delegate.name) AS delegate_name,
+               ast.status, ast.acted_by, COALESCE(ast.acted_by_name_snapshot, actor.name) AS acted_by_name,
+               ast.acted_at, ast.post_approved_by,
+               COALESCE(ast.post_approved_by_name_snapshot, post_actor.name) AS post_approved_by_name,
+               ast.post_approved_at, ast.rejected_reason
+        FROM approval_steps ast
+        JOIN users approver ON approver.id = ast.approver_user_id
+        LEFT JOIN users delegate ON delegate.id = ast.delegate_user_id
+        LEFT JOIN users actor ON actor.id = ast.acted_by
+        LEFT JOIN users post_actor ON post_actor.id = ast.post_approved_by
+        WHERE ast.document_type = #{documentType}
+          AND ast.document_id = #{documentId}
+          AND ast.approver_user_id = #{approverUserId}
+          AND ast.delegate_user_id IS NOT NULL
+          AND ast.acted_by = ast.delegate_user_id
+          AND ast.status = 'APPROVED'
+          AND ast.post_approved_at IS NULL
+        ORDER BY ast.step_order, ast.id
+        LIMIT 1
+    </select>
+
+    <update id="updatePostApprovalStep">
+        UPDATE approval_steps
+        SET post_approved_by = #{postApprovedBy},
+            post_approved_by_name_snapshot = (SELECT name FROM users WHERE id = #{postApprovedBy}),
+            post_approved_at = NOW()
+        WHERE id = #{stepId}
+          AND post_approved_at IS NULL
+    </update>
+
+    <delete id="deleteSteps">
+        DELETE FROM approval_steps
+        WHERE document_type = #{documentType}
+          AND document_id = #{documentId}
+    </delete>
+
+    <select id="findInboxItems" resultType="ApprovalInboxItem">
+        SELECT ast.id AS step_id, ast.document_type, ast.document_id, ast.step_order,
+               lr.user_id AS requester_id, u.name AS requester_name, t.name AS team_name,
+               CONCAT_WS('_',
+                   CONCAT(
+                       CASE lr.type
+                           WHEN 'ANNUAL' THEN '연차'
+                           WHEN 'AM_HALF' THEN '오전 반차'
+                           WHEN 'PM_HALF' THEN '오후 반차'
+                           WHEN 'SICK' THEN '병가'
+                           WHEN 'CONDOLENCE' THEN '경조휴가'
+                           WHEN 'OFFICIAL' THEN '공가'
+                           WHEN 'HEALTH' THEN '보건휴가'
+                           WHEN 'MATERNITY' THEN '출산휴가'
+                           WHEN 'PARENTAL' THEN '육아휴직'
+                           WHEN 'RESERVE' THEN '예비군/민방위'
+                           WHEN 'SPECIAL' THEN '특별휴가'
+                           ELSE '휴가'
+                       END,
+                       '신청서'
+                   ),
+                   NULLIF(t.name, ''), u.name
+               ) AS title,
+               lr.start_date, lr.end_date, lr.status,
+               ast.approver_user_id, approver.name AS approver_name,
+               ast.delegate_user_id, delegate.name AS delegate_name,
+               NULL AS receipt_id, NULL AS receipt_original_filename,
+               lr.created_at
+        FROM approval_steps ast
+        JOIN leave_requests lr ON lr.id = ast.document_id AND ast.document_type = 'LEAVE'
+        JOIN users u ON u.id = lr.user_id
+        LEFT JOIN teams t ON t.id = u.team_id
+        JOIN users approver ON approver.id = ast.approver_user_id
+        LEFT JOIN users delegate ON delegate.id = ast.delegate_user_id
+        WHERE ast.status = 'PENDING'
+          AND lr.status IN ('PENDING', 'CANCEL_PENDING')
+          AND lr.current_approval_step = ast.step_order
+          AND (ast.approver_user_id = #{userId} OR ast.delegate_user_id = #{userId})
+        UNION ALL
+        SELECT ast.id AS step_id, ast.document_type, ast.document_id, ast.step_order,
+               bt.user_id AS requester_id, u.name AS requester_name, t.name AS team_name,
+               CONCAT_WS('_', '출장신청서', NULLIF(t.name, ''), u.name) AS title,
+               bt.start_date, bt.end_date, bt.status,
+               ast.approver_user_id, approver.name AS approver_name,
+               ast.delegate_user_id, delegate.name AS delegate_name,
+               btr.id AS receipt_id, btr.original_filename AS receipt_original_filename,
+               bt.created_at
+        FROM approval_steps ast
+        JOIN business_trips bt ON bt.id = ast.document_id AND ast.document_type = 'TRIP'
+        JOIN users u ON u.id = bt.user_id
+        LEFT JOIN teams t ON t.id = u.team_id
+        JOIN users approver ON approver.id = ast.approver_user_id
+        LEFT JOIN users delegate ON delegate.id = ast.delegate_user_id
+        LEFT JOIN business_trip_receipts btr ON btr.trip_id = bt.id
+        WHERE ast.status = 'PENDING'
+          AND bt.status = 'PENDING'
+          AND bt.current_approval_step = ast.step_order
+          AND (ast.approver_user_id = #{userId} OR ast.delegate_user_id = #{userId})
+        UNION ALL
+        <!-- [UX47] 출장보고서 -->
+        SELECT ast.id AS step_id, ast.document_type, ast.document_id, ast.step_order,
+               bt.user_id AS requester_id, u.name AS requester_name, t.name AS team_name,
+               CONCAT_WS('_', '출장보고서', NULLIF(t.name, ''), u.name) AS title,
+               bt.start_date, bt.end_date, r.status,
+               ast.approver_user_id, approver.name AS approver_name,
+               ast.delegate_user_id, delegate.name AS delegate_name,
+               NULL AS receipt_id, NULL AS receipt_original_filename,
+               r.created_at
+        FROM approval_steps ast
+        JOIN business_trip_reports r ON r.id = ast.document_id AND ast.document_type = 'TRIP_REPORT'
+        JOIN business_trips bt ON bt.id = r.trip_id
+        JOIN users u ON u.id = bt.user_id
+        LEFT JOIN teams t ON t.id = u.team_id
+        JOIN users approver ON approver.id = ast.approver_user_id
+        LEFT JOIN users delegate ON delegate.id = ast.delegate_user_id
+        WHERE ast.status = 'PENDING'
+          AND r.status = 'PENDING'
+          AND r.current_approval_step = ast.step_order
+          AND (ast.approver_user_id = #{userId} OR ast.delegate_user_id = #{userId})
+        UNION ALL
+        SELECT ast.id AS step_id, ast.document_type, ast.document_id, ast.step_order,
+               ft.user_id AS requester_id, u.name AS requester_name, t.name AS team_name,
+               CONCAT_WS('_', '시차출근신청서', NULLIF(t.name, ''), u.name) AS title,
+               ft.start_date, ft.end_date, ft.status,
+               ast.approver_user_id, approver.name AS approver_name,
+               ast.delegate_user_id, delegate.name AS delegate_name,
+               NULL AS receipt_id, NULL AS receipt_original_filename,
+               ft.created_at
+        FROM approval_steps ast
+        JOIN flex_time_requests ft ON ft.id = ast.document_id AND ast.document_type = 'FLEX_TIME'
+        JOIN users u ON u.id = ft.user_id
+        LEFT JOIN teams t ON t.id = u.team_id
+        JOIN users approver ON approver.id = ast.approver_user_id
+        LEFT JOIN users delegate ON delegate.id = ast.delegate_user_id
+        WHERE ast.status = 'PENDING'
+          AND ft.status = 'PENDING'
+          AND ft.current_approval_step = ast.step_order
+          AND (ast.approver_user_id = #{userId} OR ast.delegate_user_id = #{userId})
+        UNION ALL
+        SELECT ast.id AS step_id, ast.document_type, ast.document_id, ast.step_order,
+               ac.user_id AS requester_id, u.name AS requester_name, t.name AS team_name,
+               CONCAT_WS('_', '근태정정신청서', NULLIF(t.name, ''), u.name) AS title,
+               ac.work_date AS start_date, ac.work_date AS end_date, ac.status,
+               ast.approver_user_id, approver.name AS approver_name,
+               ast.delegate_user_id, delegate.name AS delegate_name,
+               NULL AS receipt_id, NULL AS receipt_original_filename,
+               ac.created_at
+        FROM approval_steps ast
+        JOIN attendance_corrections ac ON ac.id = ast.document_id AND ast.document_type = 'ATTENDANCE_CORRECTION'
+        JOIN users u ON u.id = ac.user_id
+        LEFT JOIN teams t ON t.id = u.team_id
+        JOIN users approver ON approver.id = ast.approver_user_id
+        LEFT JOIN users delegate ON delegate.id = ast.delegate_user_id
+        WHERE ast.status = 'PENDING'
+          AND ac.status = 'PENDING'
+          AND ac.current_approval_step = ast.step_order
+          AND (ast.approver_user_id = #{userId} OR ast.delegate_user_id = #{userId})
+        UNION ALL
+        <!-- [B7] 휴직 — 복직일 미정이면 end_date 가 NULL 이라 목록에서 시작일만 보인다. -->
+        SELECT ast.id AS step_id, ast.document_type, ast.document_id, ast.step_order,
+               r.user_id AS requester_id, u.name AS requester_name, t.name AS team_name,
+               CONCAT_WS('_', CONCAT(lt.label, ' 신청서'), NULLIF(t.name, ''), u.name) AS title,
+               r.start_date, r.end_date, r.status,
+               ast.approver_user_id, approver.name AS approver_name,
+               ast.delegate_user_id, delegate.name AS delegate_name,
+               NULL AS receipt_id, NULL AS receipt_original_filename,
+               r.created_at
+        FROM approval_steps ast
+        JOIN loa_requests r ON r.id = ast.document_id AND ast.document_type = 'LOA'
+        JOIN loa_types lt ON lt.code = r.type
+        JOIN users u ON u.id = r.user_id
+        LEFT JOIN teams t ON t.id = u.team_id
+        JOIN users approver ON approver.id = ast.approver_user_id
+        LEFT JOIN users delegate ON delegate.id = ast.delegate_user_id
+        WHERE ast.status = 'PENDING'
+          AND r.status = 'PENDING'
+          AND r.current_approval_step = ast.step_order
+          AND (ast.approver_user_id = #{userId} OR ast.delegate_user_id = #{userId})
+        ORDER BY created_at DESC
+    </select>
+
+    <select id="findDocumentItems" resultType="ApprovalInboxItem">
+        SELECT *
+        FROM (
+            SELECT NULL AS step_id, 'LEAVE' AS document_type, lr.id AS document_id, lr.current_approval_step AS step_order,
+                   lr.user_id AS requester_id, u.name AS requester_name, t.name AS team_name,
+                   CONCAT_WS('_',
+                       CONCAT(
+                           CASE lr.type
+                               WHEN 'ANNUAL' THEN '연차'
+                               WHEN 'AM_HALF' THEN '오전 반차'
+                               WHEN 'PM_HALF' THEN '오후 반차'
+                               WHEN 'SICK' THEN '병가'
+                               WHEN 'CONDOLENCE' THEN '경조휴가'
+                               WHEN 'OFFICIAL' THEN '공가'
+                               WHEN 'HEALTH' THEN '보건휴가'
+                               WHEN 'MATERNITY' THEN '출산휴가'
+                               WHEN 'PARENTAL' THEN '육아휴직'
+                               WHEN 'RESERVE' THEN '예비군/민방위'
+                               WHEN 'SPECIAL' THEN '특별휴가'
+                               ELSE '휴가'
+                           END,
+                           '신청서'
+                       ),
+                       NULLIF(t.name, ''), u.name
+                   ) AS title,
+                   lr.start_date, lr.end_date, lr.status,
+                   NULL AS approver_user_id, NULL AS approver_name,
+                   NULL AS delegate_user_id, NULL AS delegate_name,
+                   NULL AS receipt_id, NULL AS receipt_original_filename,
+                   (
+                       SELECT GROUP_CONCAT(receiver.name ORDER BY receiver.name SEPARATOR ', ')
+                       FROM approval_document_receivers adr
+                       JOIN teams receiver ON receiver.id = adr.receiver_team_id
+                       WHERE adr.document_type = 'LEAVE'
+                         AND adr.document_id = lr.id
+                   ) AS receiver_team_name,
+                   lr.created_at
+            FROM leave_requests lr
+            JOIN users u ON u.id = lr.user_id
+            LEFT JOIN teams t ON t.id = u.team_id
+            WHERE
+            <choose>
+                <when test="box == 'pending'">
+                    lr.status IN ('PENDING', 'CANCEL_PENDING')
+                    AND (#{superAdmin} = TRUE OR EXISTS (
+                        SELECT 1 FROM approval_steps ast
+                        WHERE ast.document_type = 'LEAVE'
+                          AND ast.document_id = lr.id
+                          AND ast.status = 'PENDING'
+                          AND lr.current_approval_step = ast.step_order
+                          AND (ast.approver_user_id = #{userId} OR ast.delegate_user_id = #{userId})
+                    ))
+                </when>
+                <when test="box == 'requested'">
+                    lr.status IN ('PENDING', 'CANCEL_PENDING') AND (#{superAdmin} = TRUE OR lr.user_id = #{userId})
+                </when>
+                <when test="box == 'completed'">
+                    lr.status IN ('APPROVED', 'REJECTED', 'CANCELED', 'CANCEL_APPROVED')
+                    AND (
+                        #{superAdmin} = TRUE
+                        OR lr.user_id = #{userId}
+                        OR u.team_id = #{teamId}
+                        OR EXISTS (
+                            SELECT 1 FROM approval_steps ast
+                            WHERE ast.document_type = 'LEAVE'
+                              AND ast.document_id = lr.id
+                              AND (ast.approver_user_id = #{userId} OR ast.delegate_user_id = #{userId} OR ast.acted_by = #{userId} OR ast.acted_by IN (SELECT u2.id FROM users u2 WHERE u2.team_id = #{teamId}))
+                        )
+                    )
+                </when>
+                <when test="box == 'after'">
+                    lr.status = 'APPROVED'
+                    AND EXISTS (
+                        SELECT 1 FROM approval_steps ast
+                        WHERE ast.document_type = 'LEAVE'
+                          AND ast.document_id = lr.id
+                          AND ast.status = 'APPROVED'
+                          AND ast.approver_user_id = #{userId}
+                          AND ast.delegate_user_id IS NOT NULL
+                          AND ast.acted_by = ast.delegate_user_id
+                          AND ast.post_approved_at IS NULL
+                    )
+                </when>
+                <when test="box == 'sent'">
+                    (#{superAdmin} = TRUE OR lr.user_id = #{userId})
+                </when>
+                <when test="box == 'received'">
+                    (#{superAdmin} = TRUE OR EXISTS (
+                        SELECT 1 FROM approval_document_receivers adr
+                        WHERE adr.document_type = 'LEAVE'
+                          AND adr.document_id = lr.id
+                          AND adr.receiver_team_id = #{teamId}
+                    ))
+                </when>
+                <otherwise>
+                    1 = 0
+                </otherwise>
+            </choose>
+            UNION ALL
+            SELECT NULL AS step_id, 'TRIP' AS document_type, bt.id AS document_id, bt.current_approval_step AS step_order,
+                   bt.user_id AS requester_id, u.name AS requester_name, t.name AS team_name,
+                   CONCAT_WS('_', '출장신청서', NULLIF(t.name, ''), u.name) AS title,
+                   bt.start_date, bt.end_date, bt.status,
+                   NULL AS approver_user_id, NULL AS approver_name,
+                   NULL AS delegate_user_id, NULL AS delegate_name,
+                   (
+                       SELECT btr.id
+                       FROM business_trip_receipts btr
+                       WHERE btr.trip_id = bt.id
+                       ORDER BY btr.id
+                       LIMIT 1
+                   ) AS receipt_id,
+                   (
+                       SELECT btr.original_filename
+                       FROM business_trip_receipts btr
+                       WHERE btr.trip_id = bt.id
+                       ORDER BY btr.id
+                       LIMIT 1
+                   ) AS receipt_original_filename,
+                   (
+                       SELECT GROUP_CONCAT(receiver.name ORDER BY receiver.name SEPARATOR ', ')
+                       FROM approval_document_receivers adr
+                       JOIN teams receiver ON receiver.id = adr.receiver_team_id
+                       WHERE adr.document_type = 'TRIP'
+                         AND adr.document_id = bt.id
+                   ) AS receiver_team_name,
+                   bt.created_at
+            FROM business_trips bt
+            JOIN users u ON u.id = bt.user_id
+            LEFT JOIN teams t ON t.id = u.team_id
+            WHERE
+            <choose>
+                <when test="box == 'pending'">
+                    bt.status = 'PENDING'
+                    AND (#{superAdmin} = TRUE OR EXISTS (
+                        SELECT 1 FROM approval_steps ast
+                        WHERE ast.document_type = 'TRIP'
+                          AND ast.document_id = bt.id
+                          AND ast.status = 'PENDING'
+                          AND bt.current_approval_step = ast.step_order
+                          AND (ast.approver_user_id = #{userId} OR ast.delegate_user_id = #{userId})
+                    ))
+                </when>
+                <when test="box == 'requested'">
+                    bt.status = 'PENDING' AND (#{superAdmin} = TRUE OR bt.user_id = #{userId})
+                </when>
+                <when test="box == 'completed'">
+                    bt.status IN ('APPROVED', 'REJECTED', 'CANCELED')
+                    AND (
+                        #{superAdmin} = TRUE
+                        OR bt.user_id = #{userId}
+                        OR u.team_id = #{teamId}
+                        OR EXISTS (
+                            SELECT 1 FROM approval_steps ast
+                            WHERE ast.document_type = 'TRIP'
+                              AND ast.document_id = bt.id
+                              AND (ast.approver_user_id = #{userId} OR ast.delegate_user_id = #{userId} OR ast.acted_by = #{userId} OR ast.acted_by IN (SELECT u2.id FROM users u2 WHERE u2.team_id = #{teamId}))
+                        )
+                    )
+                </when>
+                <when test="box == 'after'">
+                    bt.status = 'APPROVED'
+                    AND EXISTS (
+                        SELECT 1 FROM approval_steps ast
+                        WHERE ast.document_type = 'TRIP'
+                          AND ast.document_id = bt.id
+                          AND ast.status = 'APPROVED'
+                          AND ast.approver_user_id = #{userId}
+                          AND ast.delegate_user_id IS NOT NULL
+                          AND ast.acted_by = ast.delegate_user_id
+                          AND ast.post_approved_at IS NULL
+                    )
+                </when>
+                <when test="box == 'sent'">
+                    (#{superAdmin} = TRUE OR bt.user_id = #{userId})
+                </when>
+                <when test="box == 'received'">
+                    (#{superAdmin} = TRUE OR EXISTS (
+                        SELECT 1 FROM approval_document_receivers adr
+                        WHERE adr.document_type = 'TRIP'
+                          AND adr.document_id = bt.id
+                          AND adr.receiver_team_id = #{teamId}
+                    ))
+                </when>
+                <otherwise>
+                    1 = 0
+                </otherwise>
+            </choose>
+            UNION ALL
+            <!-- [UX47] 출장보고서 -->
+            SELECT NULL AS step_id, 'TRIP_REPORT' AS document_type, r.id AS document_id, r.current_approval_step AS step_order,
+                   bt.user_id AS requester_id, u.name AS requester_name, t.name AS team_name,
+                   CONCAT_WS('_', '출장보고서', NULLIF(t.name, ''), u.name) AS title,
+                   bt.start_date, bt.end_date, r.status,
+                   NULL AS approver_user_id, NULL AS approver_name,
+                   NULL AS delegate_user_id, NULL AS delegate_name,
+                   NULL AS receipt_id, NULL AS receipt_original_filename,
+                   (
+                       SELECT GROUP_CONCAT(receiver.name ORDER BY receiver.name SEPARATOR ', ')
+                       FROM approval_document_receivers adr
+                       JOIN teams receiver ON receiver.id = adr.receiver_team_id
+                       WHERE adr.document_type = 'TRIP_REPORT'
+                         AND adr.document_id = r.id
+                   ) AS receiver_team_name,
+                   r.created_at
+            FROM business_trip_reports r
+            JOIN business_trips bt ON bt.id = r.trip_id
+            JOIN users u ON u.id = bt.user_id
+            LEFT JOIN teams t ON t.id = u.team_id
+            WHERE
+            <choose>
+                <when test="box == 'pending'">
+                    r.status = 'PENDING'
+                    AND (#{superAdmin} = TRUE OR EXISTS (
+                        SELECT 1 FROM approval_steps ast
+                        WHERE ast.document_type = 'TRIP_REPORT'
+                          AND ast.document_id = r.id
+                          AND ast.status = 'PENDING'
+                          AND r.current_approval_step = ast.step_order
+                          AND (ast.approver_user_id = #{userId} OR ast.delegate_user_id = #{userId})
+                    ))
+                </when>
+                <when test="box == 'requested'">
+                    r.status = 'PENDING' AND (#{superAdmin} = TRUE OR bt.user_id = #{userId})
+                </when>
+                <when test="box == 'completed'">
+                    r.status IN ('APPROVED', 'REJECTED', 'CANCELED')
+                    AND (
+                        #{superAdmin} = TRUE
+                        OR bt.user_id = #{userId}
+                        OR u.team_id = #{teamId}
+                        OR EXISTS (
+                            SELECT 1 FROM approval_steps ast
+                            WHERE ast.document_type = 'TRIP_REPORT'
+                              AND ast.document_id = r.id
+                              AND (ast.approver_user_id = #{userId} OR ast.delegate_user_id = #{userId} OR ast.acted_by = #{userId} OR ast.acted_by IN (SELECT u2.id FROM users u2 WHERE u2.team_id = #{teamId}))
+                        )
+                    )
+                </when>
+                <when test="box == 'after'">
+                    r.status = 'APPROVED'
+                    AND EXISTS (
+                        SELECT 1 FROM approval_steps ast
+                        WHERE ast.document_type = 'TRIP_REPORT'
+                          AND ast.document_id = r.id
+                          AND ast.status = 'APPROVED'
+                          AND ast.approver_user_id = #{userId}
+                          AND ast.delegate_user_id IS NOT NULL
+                          AND ast.acted_by = ast.delegate_user_id
+                          AND ast.post_approved_at IS NULL
+                    )
+                </when>
+                <when test="box == 'sent'">
+                    (#{superAdmin} = TRUE OR bt.user_id = #{userId})
+                </when>
+                <when test="box == 'received'">
+                    (#{superAdmin} = TRUE OR EXISTS (
+                        SELECT 1 FROM approval_document_receivers adr
+                        WHERE adr.document_type = 'TRIP_REPORT'
+                          AND adr.document_id = r.id
+                          AND adr.receiver_team_id = #{teamId}
+                    ))
+                </when>
+                <otherwise>
+                    1 = 0
+                </otherwise>
+            </choose>
+            UNION ALL
+            SELECT NULL AS step_id, 'FLEX_TIME' AS document_type, ft.id AS document_id, ft.current_approval_step AS step_order,
+                   ft.user_id AS requester_id, u.name AS requester_name, t.name AS team_name,
+                   CONCAT_WS('_', '시차출근신청서', NULLIF(t.name, ''), u.name) AS title,
+                   ft.start_date, ft.end_date, ft.status,
+                   NULL AS approver_user_id, NULL AS approver_name,
+                   NULL AS delegate_user_id, NULL AS delegate_name,
+                   NULL AS receipt_id, NULL AS receipt_original_filename,
+                   (
+                       SELECT GROUP_CONCAT(receiver.name ORDER BY receiver.name SEPARATOR ', ')
+                       FROM approval_document_receivers adr
+                       JOIN teams receiver ON receiver.id = adr.receiver_team_id
+                       WHERE adr.document_type = 'FLEX_TIME'
+                         AND adr.document_id = ft.id
+                   ) AS receiver_team_name,
+                   ft.created_at
+            FROM flex_time_requests ft
+            JOIN users u ON u.id = ft.user_id
+            LEFT JOIN teams t ON t.id = u.team_id
+            WHERE
+            <choose>
+                <when test="box == 'pending'">
+                    ft.status = 'PENDING'
+                    AND (#{superAdmin} = TRUE OR EXISTS (
+                        SELECT 1 FROM approval_steps ast
+                        WHERE ast.document_type = 'FLEX_TIME'
+                          AND ast.document_id = ft.id
+                          AND ast.status = 'PENDING'
+                          AND ft.current_approval_step = ast.step_order
+                          AND (ast.approver_user_id = #{userId} OR ast.delegate_user_id = #{userId})
+                    ))
+                </when>
+                <when test="box == 'requested'">
+                    ft.status = 'PENDING' AND (#{superAdmin} = TRUE OR ft.user_id = #{userId})
+                </when>
+                <when test="box == 'completed'">
+                    ft.status IN ('APPROVED', 'REJECTED', 'CANCELED')
+                    AND (
+                        #{superAdmin} = TRUE
+                        OR ft.user_id = #{userId}
+                        OR u.team_id = #{teamId}
+                        OR EXISTS (
+                            SELECT 1 FROM approval_steps ast
+                            WHERE ast.document_type = 'FLEX_TIME'
+                              AND ast.document_id = ft.id
+                              AND (ast.approver_user_id = #{userId} OR ast.delegate_user_id = #{userId} OR ast.acted_by = #{userId} OR ast.acted_by IN (SELECT u2.id FROM users u2 WHERE u2.team_id = #{teamId}))
+                        )
+                    )
+                </when>
+                <when test="box == 'after'">
+                    ft.status = 'APPROVED'
+                    AND EXISTS (
+                        SELECT 1 FROM approval_steps ast
+                        WHERE ast.document_type = 'FLEX_TIME'
+                          AND ast.document_id = ft.id
+                          AND ast.status = 'APPROVED'
+                          AND ast.approver_user_id = #{userId}
+                          AND ast.delegate_user_id IS NOT NULL
+                          AND ast.acted_by = ast.delegate_user_id
+                          AND ast.post_approved_at IS NULL
+                    )
+                </when>
+                <when test="box == 'sent'">
+                    (#{superAdmin} = TRUE OR ft.user_id = #{userId})
+                </when>
+                <when test="box == 'received'">
+                    (#{superAdmin} = TRUE OR EXISTS (
+                        SELECT 1 FROM approval_document_receivers adr
+                        WHERE adr.document_type = 'FLEX_TIME'
+                          AND adr.document_id = ft.id
+                          AND adr.receiver_team_id = #{teamId}
+                    ))
+                </when>
+                <otherwise>
+                    1 = 0
+                </otherwise>
+            </choose>
+            UNION ALL
+            SELECT NULL AS step_id, 'ATTENDANCE_CORRECTION' AS document_type, ac.id AS document_id, ac.current_approval_step AS step_order,
+                   ac.user_id AS requester_id, u.name AS requester_name, t.name AS team_name,
+                   CONCAT_WS('_', '근태정정신청서', NULLIF(t.name, ''), u.name) AS title,
+                   ac.work_date AS start_date, ac.work_date AS end_date, ac.status,
+                   NULL AS approver_user_id, NULL AS approver_name,
+                   NULL AS delegate_user_id, NULL AS delegate_name,
+                   NULL AS receipt_id, NULL AS receipt_original_filename,
+                   (
+                       SELECT GROUP_CONCAT(receiver.name ORDER BY receiver.name SEPARATOR ', ')
+                       FROM approval_document_receivers adr
+                       JOIN teams receiver ON receiver.id = adr.receiver_team_id
+                       WHERE adr.document_type = 'ATTENDANCE_CORRECTION'
+                         AND adr.document_id = ac.id
+                   ) AS receiver_team_name,
+                   ac.created_at
+            FROM attendance_corrections ac
+            JOIN users u ON u.id = ac.user_id
+            LEFT JOIN teams t ON t.id = u.team_id
+            WHERE
+            <choose>
+                <when test="box == 'pending'">
+                    ac.status = 'PENDING'
+                    AND (#{superAdmin} = TRUE OR EXISTS (
+                        SELECT 1 FROM approval_steps ast
+                        WHERE ast.document_type = 'ATTENDANCE_CORRECTION'
+                          AND ast.document_id = ac.id
+                          AND ast.status = 'PENDING'
+                          AND ac.current_approval_step = ast.step_order
+                          AND (ast.approver_user_id = #{userId} OR ast.delegate_user_id = #{userId})
+                    ))
+                </when>
+                <when test="box == 'requested'">
+                    ac.status = 'PENDING' AND (#{superAdmin} = TRUE OR ac.user_id = #{userId})
+                </when>
+                <when test="box == 'completed'">
+                    ac.status IN ('APPROVED', 'REJECTED', 'CANCELED')
+                    AND (
+                        #{superAdmin} = TRUE
+                        OR ac.user_id = #{userId}
+                        OR u.team_id = #{teamId}
+                        OR EXISTS (
+                            SELECT 1 FROM approval_steps ast
+                            WHERE ast.document_type = 'ATTENDANCE_CORRECTION'
+                              AND ast.document_id = ac.id
+                              AND (ast.approver_user_id = #{userId} OR ast.delegate_user_id = #{userId} OR ast.acted_by = #{userId} OR ast.acted_by IN (SELECT u2.id FROM users u2 WHERE u2.team_id = #{teamId}))
+                        )
+                    )
+                </when>
+                <when test="box == 'after'">
+                    ac.status = 'APPROVED'
+                    AND EXISTS (
+                        SELECT 1 FROM approval_steps ast
+                        WHERE ast.document_type = 'ATTENDANCE_CORRECTION'
+                          AND ast.document_id = ac.id
+                          AND ast.status = 'APPROVED'
+                          AND ast.approver_user_id = #{userId}
+                          AND ast.delegate_user_id IS NOT NULL
+                          AND ast.acted_by = ast.delegate_user_id
+                          AND ast.post_approved_at IS NULL
+                    )
+                </when>
+                <when test="box == 'sent'">
+                    (#{superAdmin} = TRUE OR ac.user_id = #{userId})
+                </when>
+                <when test="box == 'received'">
+                    (#{superAdmin} = TRUE OR EXISTS (
+                        SELECT 1 FROM approval_document_receivers adr
+                        WHERE adr.document_type = 'ATTENDANCE_CORRECTION'
+                          AND adr.document_id = ac.id
+                          AND adr.receiver_team_id = #{teamId}
+                    ))
+                </when>
+                <otherwise>
+                    1 = 0
+                </otherwise>
+            </choose>
+            UNION ALL
+            <!-- [B7] 휴직 — 다른 신청서와 같은 상자 규칙을 그대로 따른다. -->
+            SELECT NULL AS step_id, 'LOA' AS document_type, r.id AS document_id, r.current_approval_step AS step_order,
+                   r.user_id AS requester_id, u.name AS requester_name, t.name AS team_name,
+                   CONCAT_WS('_', CONCAT(lt.label, ' 신청서'), NULLIF(t.name, ''), u.name) AS title,
+                   r.start_date, r.end_date, r.status,
+                   NULL AS approver_user_id, NULL AS approver_name,
+                   NULL AS delegate_user_id, NULL AS delegate_name,
+                   NULL AS receipt_id, NULL AS receipt_original_filename,
+                   (
+                       SELECT GROUP_CONCAT(receiver.name ORDER BY receiver.name SEPARATOR ', ')
+                       FROM approval_document_receivers adr
+                       JOIN teams receiver ON receiver.id = adr.receiver_team_id
+                       WHERE adr.document_type = 'LOA'
+                         AND adr.document_id = r.id
+                   ) AS receiver_team_name,
+                   r.created_at
+            FROM loa_requests r
+            JOIN loa_types lt ON lt.code = r.type
+            JOIN users u ON u.id = r.user_id
+            LEFT JOIN teams t ON t.id = u.team_id
+            WHERE
+            <choose>
+                <when test="box == 'pending'">
+                    r.status = 'PENDING'
+                    AND (#{superAdmin} = TRUE OR EXISTS (
+                        SELECT 1 FROM approval_steps ast
+                        WHERE ast.document_type = 'LOA'
+                          AND ast.document_id = r.id
+                          AND ast.status = 'PENDING'
+                          AND r.current_approval_step = ast.step_order
+                          AND (ast.approver_user_id = #{userId} OR ast.delegate_user_id = #{userId})
+                    ))
+                </when>
+                <when test="box == 'requested'">
+                    r.status = 'PENDING' AND (#{superAdmin} = TRUE OR r.user_id = #{userId})
+                </when>
+                <when test="box == 'completed'">
+                    r.status IN ('APPROVED', 'REJECTED', 'CANCELED')
+                    AND (
+                        #{superAdmin} = TRUE
+                        OR r.user_id = #{userId}
+                        OR u.team_id = #{teamId}
+                        OR EXISTS (
+                            SELECT 1 FROM approval_steps ast
+                            WHERE ast.document_type = 'LOA'
+                              AND ast.document_id = r.id
+                              AND (ast.approver_user_id = #{userId} OR ast.delegate_user_id = #{userId} OR ast.acted_by = #{userId} OR ast.acted_by IN (SELECT u2.id FROM users u2 WHERE u2.team_id = #{teamId}))
+                        )
+                    )
+                </when>
+                <when test="box == 'after'">
+                    r.status = 'APPROVED'
+                    AND EXISTS (
+                        SELECT 1 FROM approval_steps ast
+                        WHERE ast.document_type = 'LOA'
+                          AND ast.document_id = r.id
+                          AND ast.status = 'APPROVED'
+                          AND ast.approver_user_id = #{userId}
+                          AND ast.delegate_user_id IS NOT NULL
+                          AND ast.acted_by = ast.delegate_user_id
+                          AND ast.post_approved_at IS NULL
+                    )
+                </when>
+                <when test="box == 'sent'">
+                    (#{superAdmin} = TRUE OR r.user_id = #{userId})
+                </when>
+                <when test="box == 'received'">
+                    (#{superAdmin} = TRUE OR EXISTS (
+                        SELECT 1 FROM approval_document_receivers adr
+                        WHERE adr.document_type = 'LOA'
+                          AND adr.document_id = r.id
+                          AND adr.receiver_team_id = #{teamId}
+                    ))
+                </when>
+                <otherwise>
+                    1 = 0
+                </otherwise>
+            </choose>
+        ) docs
+        ORDER BY docs.created_at DESC, docs.document_id DESC
+    </select>
+
+    <select id="findDelegations" resultType="ApprovalDelegation">
+        SELECT ad.id, ad.approver_user_id, owner.name AS approver_name,
+               ad.delegate_user_id, delegate.name AS delegate_name,
+               ad.start_date, ad.end_date, ad.reason, ad.active, ad.created_at
+        FROM approval_delegations ad
+        JOIN users owner ON owner.id = ad.approver_user_id
+        JOIN users delegate ON delegate.id = ad.delegate_user_id
+        WHERE ad.approver_user_id = #{approverUserId}
+        ORDER BY ad.active DESC, ad.start_date DESC, ad.id DESC
+    </select>
+
+    <select id="findActiveDelegationsForUser" resultType="ApprovalDelegation">
+        SELECT ad.id, ad.approver_user_id, owner.name AS approver_name,
+               ad.delegate_user_id, delegate.name AS delegate_name,
+               ad.start_date, ad.end_date, ad.reason, ad.active, ad.created_at
+        FROM approval_delegations ad
+        JOIN users owner ON owner.id = ad.approver_user_id
+        JOIN users delegate ON delegate.id = ad.delegate_user_id
+        WHERE ad.approver_user_id = #{approverUserId}
+          AND ad.active = TRUE
+          AND ad.start_date &lt;= #{endDate}
+          AND ad.end_date >= #{startDate}
+        ORDER BY ad.start_date DESC, ad.id DESC
+    </select>
+
+    <insert id="insertDelegation" parameterType="ApprovalDelegation" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO approval_delegations(approver_user_id, delegate_user_id, start_date, end_date, reason, active)
+        VALUES(#{approverUserId}, #{delegateUserId}, #{startDate}, #{endDate}, #{reason}, TRUE)
+    </insert>
+
+    <update id="deactivateDelegation">
+        UPDATE approval_delegations
+        SET active = FALSE
+        WHERE id = #{id}
+          AND approver_user_id = #{approverUserId}
+    </update>
+</mapper>

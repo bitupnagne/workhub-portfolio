@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title th:text="${title}">관리자 공지</title>
+  <link rel="icon" type="image/svg+xml" th:href="@{/img/AppLogoMini.svg}">
+  <link rel="stylesheet" th:href="@{/css/worksystem.css}">
+</head>
+<body>
+<div class="app">
+  <div th:replace="~{fragments/app :: sidebar}"></div>
+  <main>
+    <div th:replace="~{fragments/app :: topbar}"></div>
+    <div class="content admin-page" data-ws-query-contract="admin-notices-v1" data-ws-query-path="self" data-ws-query-params="q status page" data-ws-query-context="default">
+      <div class="banner ok" th:if="${message}" th:text="${message}"></div>
+      <div class="banner err" th:if="${error}" th:text="${error}"></div>
+
+      <div class="admin-title-row">
+        <div>
+          <h2>관리자 공지</h2>
+          <p>전 직원에게 노출할 공지와 알림 발송을 관리합니다.</p>
+        </div>
+        <a class="btn primary" th:href="@{/admin/notices/new}">공지 작성</a>
+      </div>
+
+      <section class="section-block">
+        <div class="section-header no-caret">
+          <div class="section-left"><span class="sdot sdot-done"></span><span class="sname">공지 검색</span></div>
+        </div>
+        <form class="admin-filter-bar" th:action="@{/admin/notices}" method="get" data-ws-query-filter="filter-0">
+          <input class="admin-search-input" name="q" th:value="${query}" placeholder="제목, 내용, 작성자 검색">
+          <select name="status" aria-label="공지 상태">
+            <option value="all" th:selected="${statusFilter == 'all'}">전체 상태</option>
+            <option value="active" th:selected="${statusFilter == 'active'}">게시중</option>
+            <option value="inactive" th:selected="${statusFilter == 'inactive'}">삭제됨</option>
+          </select>
+          <button class="btn primary" type="submit">조회</button>
+          <a class="btn" th:href="@{/admin/notices}" data-ws-query-reset="">초기화</a>
+        </form>
+      </section>
+
+      <section class="section-block" data-ws-query-region="results">
+        <div class="section-header no-caret">
+          <div class="section-left"><span class="sdot sdot-new"></span><span class="sname">공지 목록</span><span class="scnt scnt-new" th:text="${#lists.size(notices)}">0</span></div>
+        </div>
+        <div class="table-scroll">
+          <table class="rt admin-data-table">
+            <thead><tr><th>#</th><th>제목</th><th>상태</th><th>알림 수신</th><th>작성자</th><th>수정일</th><th>관리</th></tr></thead>
+            <tbody>
+            <tr class="empty-tr" th:if="${#lists.isEmpty(notices)}"><td colspan="7">등록된 공지가 없습니다.</td></tr>
+            <tr class="mr" th:each="notice, stat : ${notices}">
+              <td th:text="${stat.count}">1</td>
+              <td>
+                <b>
+                  <span th:if="${notice.pollOpen}" class="poll-chip open">투표 진행중</span>
+                  <span th:if="${notice.pollClosed}" class="poll-chip closed">투표 종료</span>
+                  <span th:text="${notice.title}">공지 제목</span>
+                </b>
+                <div class="muted notice-body-preview" th:text="${notice.plainBody}">공지 내용</div>
+              </td>
+              <td><span class="status-pill" th:classappend="${notice.active} ? ' ok' : ' danger'" th:text="${notice.active ? '게시중' : '삭제됨'}">게시중</span></td>
+              <td th:text="|${notice.recipientCount ?: 0}명|">0명</td>
+              <td th:text="${notice.createdByName}">작성자</td>
+              <td><span class="date-mono" th:text="${#temporals.format(notice.updatedAt, 'yyyy-MM-dd HH:mm')}">2026-01-01</span></td>
+              <td>
+                <div class="act-wrap">
+                  <a class="rbtn" th:if="${notice.active}" th:href="@{/notices/{id}(id=${notice.id})}">보기</a>
+                  <a class="rbtn acc" data-edit-link th:href="@{/admin/notices/{id}/edit(id=${notice.id})}">수정</a>
+                </div>
+              </td>
+            </tr>
+            </tbody>
+          </table>
+        </div>
+        <div th:replace="~{fragments/app :: pagination(${pageInfo}, ${pageBaseUrl})}"></div>
+      </section>
+    </div>
+  </main>
+</div>
+</body>
+</html>

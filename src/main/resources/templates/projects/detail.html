@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title th:text="${title}">프로젝트</title>
+  <link rel="icon" type="image/svg+xml" th:href="@{/img/AppLogoMini.svg}">
+  <link rel="stylesheet" th:href="@{/css/worksystem.css}"><link rel="stylesheet" th:href="@{/css/worksystem-projects.css}">
+</head>
+<body><div class="app"><div th:replace="~{fragments/app :: sidebar}"></div><main>
+  <div th:replace="~{fragments/app :: topbar}"></div>
+  <div class="content pm-root" data-project-root>
+    <nav class="pm-breadcrumb" aria-label="현재 위치"><a th:href="@{/projects}">프로젝트 관리</a><span aria-hidden="true">/</span><span th:text="${project.name}" aria-current="page">프로젝트</span></nav>
+    <div class="banner ok" th:if="${message}" th:text="${message}" role="status"></div>
+    <div class="banner err" th:if="${error}" th:text="${error}" role="alert" tabindex="-1" data-project-error></div>
+    <header class="pm-heading"><div><span class="pm-status" th:attr="data-status=${project.status}" th:text="${project.statusLabel}">진행 중</span><h1 th:text="${project.name}">프로젝트명</h1><p class="pm-preserve" th:if="${!#strings.isEmpty(project.description)}" th:text="${project.description}">프로젝트 설명</p></div><a class="rbtn" th:href="@{/report/my}" th:if="${!hiddenMenus.contains('reports') and !hiddenMenus.contains('report.my')}">내 주간보고 <span aria-hidden="true">↗</span></a></header>
+    <div class="pm-summary-grid">
+      <div class="pm-summary"><span>평균 진척도</span><strong th:text="${project.progress} + '%'">0%</strong><progress class="pm-progress" max="100" th:value="${project.progress}" aria-label="프로젝트 평균 진척도">진척도</progress></div>
+      <div class="pm-summary"><span>완료한 업무</span><strong><b th:text="${project.doneTaskCount}">0</b><small th:text="' / ' + ${project.taskCount}"> / 0</small></strong><p>등록된 업무 기준</p></div>
+      <div class="pm-summary"><span>기한이 지난 업무</span><strong th:classappend="${project.overdueTaskCount > 0} ? 'pm-overdue'" th:text="${project.overdueTaskCount}">0</strong><p>완료되지 않은 업무</p></div>
+      <div class="pm-summary"><span>프로젝트 기간</span><strong class="pm-summary-date" th:text="${project.dueDate ?: '기한 미지정'}">목표 완료일</strong><p th:text="${project.startDate != null ? project.startDate + ' 시작' : '시작일 미지정'}">시작일</p></div>
+    </div>
+    <section class="pm-members-strip" aria-label="프로젝트 참여자"><div><span class="pm-muted">책임자</span> <b th:text="${project.ownerName}">책임자</b><span class="pm-divider" aria-hidden="true">·</span><span class="pm-muted" th:text="|참여 ${#lists.size(members)}명|">참여자</span></div><div class="pm-chips"><span class="pm-chip" th:each="member : ${members}" th:text="${member.name}">이름</span></div></section>
+    <div class="pm-notice" th:unless="${canContributeProject}">완료되거나 보관된 프로젝트는 읽기 전용입니다. 책임자가 프로젝트 설정에서 진행 중으로 변경할 수 있습니다.</div>
+    <details class="pm-editor" th:if="${canManageProject}" th:open="${error != null and projectFormError == true}"><summary class="pm-editor-summary"><span>프로젝트 설정·참여자</span><span class="pm-muted">책임자 관리</span></summary><div class="pm-editor-body"><div th:replace="~{projects/fragments :: projectForm(@{/projects/{id}(id=${project.id})}, '프로젝트 설정 저장')}"></div></div></details>
+    <details class="pm-editor" th:if="${canContributeProject}" th:open="${error != null and projectFormError != true}"><summary class="pm-editor-summary"><span><b aria-hidden="true">＋</b> 업무 추가</span><span class="pm-muted">담당자와 완료 기준 정하기</span></summary><div class="pm-editor-body"><div th:replace="~{projects/fragments :: taskForm(@{/projects/{id}/tasks(id=${project.id})}, '업무 등록', false)}"></div></div></details>
+    <section class="pm-workspace" data-task-views aria-label="프로젝트 업무">
+      <div class="pm-toolbar"><h2 class="pm-section-title">프로젝트 업무 <span class="pm-count" th:text="${#lists.size(tasks)}">0</span></h2><div class="pm-toolbar-actions"><label class="pm-task-search"><span class="pm-sr-only">업무 이름 또는 담당자 검색</span><input type="search" placeholder="업무 또는 담당자 검색" data-task-search autocomplete="off"></label><div class="ws-segmented" role="group" aria-label="업무 보기 방식"><button type="button" class="active" data-task-view="board" aria-pressed="true">보드</button><button type="button" data-task-view="list" aria-pressed="false">목록</button></div></div></div>
+      <p class="pm-help pm-board-hint">업무를 선택하면 진척도와 자료를 기록할 수 있습니다. 좁은 화면에서는 목록 보기가 편리합니다.</p>
+      <div class="pm-board-scroll" data-task-view-panel="board" tabindex="0" aria-label="상태별 업무 보드, 가로로 이동 가능">
+        <div class="pm-board">
+          <section class="pm-lane" th:each="state : ${taskStatuses}" th:with="rows=${tasks.?[status == #vars.state]}">
+            <header><span class="pm-status-dot" th:attr="data-status=${state.name()}" aria-hidden="true"></span><h3 th:text="${state.label}">예정</h3><span class="pm-count" th:text="${#lists.size(rows)}">0</span></header>
+            <div class="pm-lane-body"><div class="pm-task-entry" th:each="item : ${rows}" th:attr="data-task-search-text=${item.title + ' ' + item.assigneeName}"><a th:replace="~{projects/fragments :: taskCard(${item})}"></a></div><p class="pm-lane-empty" th:if="${#lists.isEmpty(rows)}">등록된 업무가 없습니다</p></div>
+          </section>
+        </div>
+      </div>
+      <div class="pm-task-list" data-task-view-panel="list" hidden>
+        <div class="pm-task-list-head" aria-hidden="true"><span>업무</span><span>상태</span><span>담당자</span><span>진척도</span><span>완료 예정일</span></div>
+        <a class="pm-task-row" th:each="item : ${tasks}" th:href="@{/projects/{pid}/tasks/{tid}(pid=${project.id},tid=${item.id})}" th:attr="data-task-search-text=${item.title + ' ' + item.assigneeName}"><strong th:text="${item.title}">업무명</strong><span class="pm-status" th:attr="data-status=${item.status.name()}" th:text="${item.status.label}">진행 중</span><span class="pm-list-owner" th:text="${item.assigneeName}">담당자</span><span class="pm-list-progress"><progress class="pm-progress" max="100" th:value="${item.progress}" th:aria-label="${item.title + ' 진척도'}">진척도</progress><b th:text="${item.progress} + '%'">0%</b></span><time th:classappend="${item.overdue} ? 'pm-overdue'" th:text="${item.dueDate ?: '기한 미지정'}">완료 예정일</time></a>
+      </div>
+      <div class="pm-empty" th:if="${#lists.isEmpty(tasks)}"><h2>아직 등록된 업무가 없습니다</h2><p>업무 추가에서 첫 업무와 담당자를 정해보세요.</p></div>
+      <p class="pm-empty" data-task-search-empty hidden>검색한 업무나 담당자가 없습니다.</p>
+    </section>
+  </div>
+</main></div><script th:src="@{/js/worksystem-projects.js}"></script></body>
+</html>

@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title th:text="${title}">출장 신청</title>
+  <link rel="icon" type="image/svg+xml" th:href="@{/img/AppLogoMini.svg}">
+  <link rel="stylesheet" th:href="@{/css/worksystem.css}">
+</head>
+<body>
+<div class="app">
+  <div th:replace="~{fragments/app :: sidebar}"></div>
+  <main>
+    <div th:replace="~{fragments/app :: topbar}"></div>
+    <div class="content admin-page">
+      <div class="banner ok" th:if="${message}" th:text="${message}"></div>
+      <div class="banner err" th:if="${error}" th:text="${error}"></div>
+
+      <div class="route-alert" th:if="${routeAlert}" th:text="${routeAlert}"></div>
+      <div class="doc-stamp-top" th:if="${routeAlert == null}">
+        <div th:replace="~{fragments/approval :: stamp(${approvalPreview}, null, 'preview', ${applicantName}, ${applicantSignature}, null)}"></div>
+      </div>
+
+      <section class="form-panel">
+        <div class="form-head">
+          <div>
+            <h2>출장 신청</h2>
+            <p>출장 기간, 목적, 예상 비용을 입력하면 결재 경로 승인 후 출장으로 반영됩니다.</p>
+          </div>
+          <a class="rbtn" th:href="@{/hr/attendance(tab='trip')}">목록</a>
+        </div>
+        <form class="stack-form" th:action="@{/hr/trips/request}" method="post" enctype="multipart/form-data" data-trip-expense-form data-approval-route-warning data-approval-doc-type="TRIP">
+          <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+          <div class="form-grid two">
+            <!-- [UX40] 정정 화면 '출장으로 처리' 진입 시 대상 일자 프리필 -->
+            <label class="field">시작일
+              <input type="date" name="startDate" th:value="${prefillStart}" required>
+            </label>
+            <label class="field">종료일
+              <input type="date" name="endDate" th:value="${prefillEnd}" required>
+            </label>
+            <label class="field">출장지
+              <input name="destination" placeholder="예: 부산지사, 고객사 A" required>
+            </label>
+            <label class="field">출장 목적
+              <input name="purpose" placeholder="예: 구축 미팅, 장애 대응">
+            </label>
+          </div>
+          <div class="sub-section-title">예상 비용</div>
+          <div class="trip-expense-editor">
+            <div class="trip-expense-head">
+              <span>항목</span><span>내용</span><span>금액</span><span>비고</span><span></span>
+            </div>
+            <div class="trip-expense-rows" data-expense-rows>
+              <div class="trip-expense-row" data-expense-row>
+                <label class="te-field" data-te="항목">
+                  <select data-expense-type required>
+                    <option th:each="type : ${expenseTypes}" th:value="${type.name()}" th:text="${type.label}">교통비</option>
+                  </select>
+                </label>
+                <label class="te-field" data-te="내용"><input data-expense-description placeholder="예: KTX, 호텔, 식대"></label>
+                <label class="te-field" data-te="금액"><input data-expense-amount type="number" min="0" step="1000" placeholder="0" required></label>
+                <label class="te-field" data-te="비고"><input data-expense-note placeholder="비고"></label>
+                <button class="rbtn del" type="button" data-expense-remove>삭제</button>
+              </div>
+            </div>
+            <button class="btn" type="button" data-expense-add>항목 추가</button>
+            <div class="expense-total-grid">
+              <div><span>교통비</span><strong data-expense-total="TRANSPORT">0원</strong></div>
+              <div><span>숙박비</span><strong data-expense-total="LODGING">0원</strong></div>
+              <div><span>식비</span><strong data-expense-total="MEAL">0원</strong></div>
+              <div><span>일비</span><strong data-expense-total="DAILY">0원</strong></div>
+              <div><span>기타</span><strong data-expense-total="ETC">0원</strong></div>
+              <div class="expense-total-all"><span>총 합계</span><strong data-expense-grand-total>0원</strong></div>
+            </div>
+          </div>
+          <!-- [UX47] 영수증 첨부는 출장 종료 후 '출장보고서'에서 — 신청 시점엔 경비 계획만 -->
+          <p class="muted">영수증 등 증빙 파일은 출장 종료 후 <b>출장보고서</b> 작성 시 첨부합니다.</p>
+          <button class="btn primary block" type="submit"
+                  th:disabled="${approvalRouteReady == false}"
+                  th:title="${approvalRouteReady == false ? '결재선이 없어 신청할 수 없습니다.' : ''}">신청하기</button>
+        </form>
+      </section>
+
+      <div class="doc-date-footer" th:text="${#temporals.format(#temporals.createToday(), 'yyyy년 MM월 dd일')}">2026년 05월 17일</div>
+    </div>
+  </main>
+</div>
+<script th:src="@{/js/worksystem-trip-expenses.js}"></script>
+</body>
+</html>

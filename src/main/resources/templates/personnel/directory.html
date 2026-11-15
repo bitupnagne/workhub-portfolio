@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>직원 목록</title><link rel="icon" type="image/svg+xml" th:href="@{/img/AppLogoMini.svg}">
+  <link rel="stylesheet" th:href="@{/css/worksystem.css}">
+</head><body><div class="app"><div th:replace="~{fragments/app :: sidebar}"></div><main>
+<div th:replace="~{fragments/app :: topbar}"></div><div class="content admin-page" data-ws-query-contract="personnel-directory-v1" data-ws-query-path="self" data-ws-query-params="view q page" data-ws-query-context="default">
+  <div class="banner ok" th:if="${message}" th:text="${message}"></div><div class="banner err" th:if="${error}" th:text="${error}"></div>
+  <div class="admin-title-row"><div><h2>직원 목록</h2><p>직원의 소속과 인사정보를 검색하고 관리합니다.</p></div>
+    <div class="people-actions"><a class="btn primary" th:if="${personnelCardsAllowed}" th:href="@{/people/me}">내 인사카드</a><a class="btn" th:if="${canManageOrganization}" th:href="@{/admin/users/new}">직원 등록</a></div></div>
+  <form class="people-filter" th:action="@{/people}" method="get" data-ws-query-filter="filter-0"><input type="hidden" name="view" value="list"><input type="search" name="q" th:value="${query}" aria-label="직원 검색" placeholder="이름·소속·담당업무 검색"><button class="btn primary" type="submit">검색</button><a class="btn" th:href="@{/people(view='list')}" data-ws-query-reset="">전체 보기</a></form><div data-ws-query-region="results">
+
+  <p class="muted" th:text="|직원 ${#lists.size(people)}명|">직원 목록</p>
+  <div class="people-empty" th:if="${#lists.isEmpty(people)}">검색 조건에 맞는 직원이 없습니다.</div>
+  <div class="people-grid"><article class="people-entry" th:each="person : ${people}" th:classappend="${personnelCardsAllowed and readablePersonIds.contains(person.id)} ? 'is-link'">
+    <h3 th:text="${person.name}">이름</h3><p><b th:text="${person.teamName ?: '소속 없음'}">팀</b><br><span class="muted" th:text="${person.jobTitle ?: person.dept ?: '-'}">담당업무</span></p>
+    <p><span th:text="|내선 ${person.extensionNumber ?: '-'}|">내선</span><br><span th:text="${person.email ?: '-'}">이메일</span></p>
+    <a class="people-entry-link" th:if="${personnelCardsAllowed and readablePersonIds.contains(person.id)}" th:href="@{/people/{id}(id=${person.id})}" th:aria-label="|${person.name} 인사카드 보기|"><span class="people-entry-chevron" aria-hidden="true">›</span></a>
+  </article></div>
+
+</div></div></main></div></body></html>

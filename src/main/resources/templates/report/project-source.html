@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<body>
+<th:block th:fragment="content(item, showLink)">
+  <span th:text="${item.content}">추진 내용</span>
+  <div class="project-report-source" th:if="${item.projectLinked}">
+    <span class="project-report-badge">프로젝트 자동 반영</span>
+    <span th:text="${item.sourceProjectName}">프로젝트</span>
+    <span th:text="|진척 ${item.projectProgress}%|">진척</span>
+    <a th:if="${showLink}" th:href="@{/projects/{projectId}/tasks/{taskId}(projectId=${item.sourceProjectId}, taskId=${item.sourceTaskId})}"
+       title="프로젝트 참여 권한이 있는 경우 원본 업무와 근거 자료를 확인할 수 있습니다">업무·근거 자료 보기</a>
+  </div>
+  <div class="project-report-summary" th:if="${item.projectLinked}" th:text="${item.projectSummary}">이번 주 활동</div>
+  <div class="project-report-note" th:if="${item.projectLinked and item.projectNote != null}">
+    <strong>보충 설명</strong><span th:text="${item.projectNote}">설명</span>
+  </div>
+</th:block>
+</body>
+</html>
