@@ -4,7 +4,7 @@
 
 ![Java](https://img.shields.io/badge/Java-21-437291?logo=openjdk&logoColor=white) ![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.0-6DB33F?logo=springboot&logoColor=white) ![Thymeleaf](https://img.shields.io/badge/Thymeleaf-server--side%20UI-005F0F?logo=thymeleaf&logoColor=white) ![MyBatis](https://img.shields.io/badge/MyBatis-SQL%20mapper-2b2b2b) ![MariaDB](https://img.shields.io/badge/MariaDB-Flyway-003545?logo=mariadb&logoColor=white) ![WebSocket](https://img.shields.io/badge/WebSocket-real--time-4b5563)
 
-[포트폴리오](https://beom.it/ko#projects) · [Portfolio in English](https://beom.it/en#projects) · [공개 데모](https://work.beom.it) · [아키텍처 설계도](https://beom.it/ko/projects/workhub?view=architecture) · [아키텍처 PDF](docs/architecture/Office_System_아키텍처_포트폴리오.pdf)
+[포트폴리오](https://beom.it/ko#projects) · [Portfolio in English](https://beom.it/en#projects) · [공개 데모](https://work.beom.it) · [아키텍처 설계도](https://beom.it/ko/projects/workhub?view=architecture) · [WorkHub 아키텍처·흐름·ERD PDF](docs/architecture/WorkHub_아키텍처_흐름_ERD.pdf) · [Office System 전체 PDF](docs/architecture/Office_System_아키텍처_포트폴리오.pdf)
 
 ![WorkHub 주간보고 화면 (공개 데모의 샘플 데이터)](https://beom.it/projects/workhub-screen.jpg)
 
