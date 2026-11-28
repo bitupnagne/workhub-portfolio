@@ -1,0 +1,14 @@
+<!-- 휴가 취소 결재 미리보기 fragment — leave.html 모달에서 fetch로 주입한다(독립 페이지 아님). -->
+<div xmlns:th="http://www.thymeleaf.org" class="leave-cancel-preview-body">
+  <div class="doc-stamp-zone">
+    <div th:replace="~{fragments/approval :: stamp(${steps}, null, 'preview', ${applicantName}, ${applicantSignature}, null)}"></div>
+  </div>
+  <table class="doc-table">
+    <tbody>
+    <tr><th>신청자</th><td th:text="${memberName}">홍길동</td><th>소속</th><td th:text="${teamName ?: '-'}">팀</td></tr>
+    <tr><th>구분</th><td th:text="${typeLabel}">연차</td><th>일수</th><td th:text="${amountText}">1일</td></tr>
+    <tr><th>기간</th><td colspan="3" th:text="${periodText}">2026-06-01 ~ 2026-06-02</td></tr>
+    <tr><th>신청 사유</th><td colspan="3" th:text="${reason ?: '-'}">사유</td></tr>
+    </tbody>
+  </table>
+</div>

@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.portfolio.worksystem.mapper.EmpGradeMapper">
+
+    <resultMap id="EmpGradeMap" type="EmpGrade">
+        <id property="id" column="id"/>
+        <result property="parentId" column="parent_id"/>
+        <result property="name" column="name"/>
+        <result property="gradeValue" column="grade_value"/>
+        <result property="unitLabel" column="unit_label"/>
+        <result property="displayOrder" column="display_order"/>
+        <result property="active" column="active"/>
+        <result property="userCount" column="user_count"/>
+    </resultMap>
+
+    <select id="findAllWithUserCount" resultMap="EmpGradeMap">
+        SELECT g.id, g.parent_id, g.name, g.grade_value, g.unit_label, g.display_order, g.active,
+               (SELECT COUNT(*) FROM users u WHERE u.grade_id = g.id AND u.active = TRUE) AS user_count
+        FROM emp_grades g
+        ORDER BY g.display_order, g.id
+    </select>
+
+    <select id="findActiveOrdered" resultMap="EmpGradeMap">
+        SELECT g.id, g.parent_id, g.name, g.grade_value, g.unit_label, g.display_order, g.active, 0 AS user_count
+        FROM emp_grades g
+        WHERE g.active = TRUE
+        ORDER BY g.display_order, g.id
+    </select>
+
+    <select id="findById" resultMap="EmpGradeMap">
+        SELECT g.id, g.parent_id, g.name, g.grade_value, g.unit_label, g.display_order, g.active, 0 AS user_count
+        FROM emp_grades g
+        WHERE g.id = #{id}
+    </select>
+
+    <select id="findByName" resultMap="EmpGradeMap">
+        SELECT g.id, g.parent_id, g.name, g.grade_value, g.unit_label, g.display_order, g.active, 0 AS user_count
+        FROM emp_grades g
+        WHERE g.name = #{name}
+        ORDER BY g.parent_id IS NOT NULL, g.display_order, g.id
+        LIMIT 1
+    </select>
+
+    <!-- 이름은 형제 사이에서만 유일하다 — '1호봉'이 급마다 있을 수 있다. -->
+    <select id="findSiblingByName" resultMap="EmpGradeMap">
+        SELECT g.id, g.parent_id, g.name, g.grade_value, g.unit_label, g.display_order, g.active, 0 AS user_count
+        FROM emp_grades g
+        WHERE g.name = #{name}
+          <choose>
+            <when test="parentId == null">AND g.parent_id IS NULL</when>
+            <otherwise>AND g.parent_id = #{parentId}</otherwise>
+          </choose>
+        LIMIT 1
+    </select>
+
+    <select id="maxDisplayOrderOfSiblings" resultType="java.lang.Integer">
+        SELECT COALESCE(MAX(display_order), 0) FROM emp_grades
+        <where>
+          <choose>
+            <when test="parentId == null">parent_id IS NULL</when>
+            <otherwise>parent_id = #{parentId}</otherwise>
+          </choose>
+        </where>
+    </select>
+
+    <select id="countUsersByGradeIds" resultType="int">
+        SELECT COUNT(*) FROM users
+        WHERE active = TRUE AND grade_id IN
+        <foreach collection="gradeIds" item="gid" open="(" separator="," close=")">#{gid}</foreach>
+    </select>
+
+    <insert id="insert" parameterType="EmpGrade" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO emp_grades(parent_id, name, grade_value, unit_label, display_order, active)
+        VALUES(#{parentId}, #{name}, #{gradeValue}, #{unitLabel}, #{displayOrder}, #{active})
+    </insert>
+
+    <update id="update" parameterType="EmpGrade">
+        UPDATE emp_grades
+        SET parent_id = #{parentId},
+            name = #{name},
+            grade_value = #{gradeValue},
+            unit_label = #{unitLabel},
+            display_order = #{displayOrder},
+            active = #{active}
+        WHERE id = #{id}
+    </update>
+
+    <delete id="delete">
+        DELETE FROM emp_grades WHERE id = #{id}
+    </delete>
+    <!-- [GRADE] 값·단위로 다시 만든 보이는 이름만 바꾼다. -->
+    <update id="updateName">
+        UPDATE emp_grades SET name = #{name} WHERE id = #{id}
+    </update>
+    <update id="updateDisplayOrder">
+        UPDATE emp_grades SET display_order = #{displayOrder} WHERE id = #{id}
+    </update>
+    <select id="findDepthUnits" resultType="map">
+        SELECT depth, unit_label FROM grade_depth_units ORDER BY depth
+    </select>
+    <insert id="upsertDepthUnit">
+        INSERT INTO grade_depth_units(depth, unit_label, updated_by) VALUES(#{depth}, #{unitLabel}, #{updatedBy})
+        ON DUPLICATE KEY UPDATE unit_label = VALUES(unit_label), updated_by = VALUES(updated_by)
+    </insert>
+    <delete id="deleteDepthUnit">
+        DELETE FROM grade_depth_units WHERE depth = #{depth}
+    </delete>
+
+    <select id="countUsersByGrade" resultType="int">
+        SELECT COUNT(*) FROM users WHERE grade_id = #{gradeId}
+    </select>
+
+    <select id="findGradeNameByUserId" resultType="string">
+        SELECT g.name
+        FROM users u
+        JOIN emp_grades g ON g.id = u.grade_id
+        WHERE u.id = #{userId}
+    </select>
+
+    <select id="findLeaderUserIds" resultType="long">
+        SELECT DISTINCT t.leader_user_id
+        FROM teams t
+        WHERE t.leader_user_id IS NOT NULL
+          AND t.active = TRUE
+          AND t.node_type IN ('TEAM', 'DIVISION')
+    </select>
+
+    <update id="updateUserGrade">
+        UPDATE users SET grade_id = #{gradeId} WHERE id = #{userId}
+    </update>
+</mapper>

@@ -1,0 +1,240 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.portfolio.worksystem.mapper.UserMapper">
+
+    <sql id="UserColumns">
+        u.id, u.username, u.employee_number, u.password, u.name, u.team_id, t.code AS team_code, t.name AS team_name,
+        u.dept, u.extension_number, u.mobile_number, u.job_title,
+        u.grade_id, (SELECT g.name FROM emp_grades g WHERE g.id = u.grade_id) AS grade_name, u.email,
+        u.hire_date, u.resigned_on, u.loa_start, u.loa_end, u.loa_type, u.profile_image_filename, u.signature_filename, u.active, u.system_account,
+        u.contractor, u.member_order, u.otp_secret, u.otp_enabled, u.must_change_password, u.created_at
+    </sql>
+
+    <resultMap id="UserAccountMap" type="UserAccount">
+        <id property="id" column="id"/>
+        <result property="username" column="username"/>
+        <result property="employeeNumber" column="employee_number"/>
+        <result property="password" column="password"/>
+        <result property="name" column="name"/>
+        <result property="teamId" column="team_id"/>
+        <result property="teamCode" column="team_code"/>
+        <result property="teamName" column="team_name"/>
+        <result property="dept" column="dept"/>
+        <result property="extensionNumber" column="extension_number"/>
+        <result property="mobileNumber" column="mobile_number"/>
+        <result property="jobTitle" column="job_title"/>
+        <result property="gradeId" column="grade_id"/>
+        <result property="gradeName" column="grade_name"/>
+        <result property="email" column="email"/>
+        <result property="hireDate" column="hire_date"/>
+        <result property="resignedOn" column="resigned_on"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="loaStart" column="loa_start"/>
+        <result property="loaEnd" column="loa_end"/>
+        <result property="loaType" column="loa_type"/>
+        <result property="profileImageFilename" column="profile_image_filename"/>
+        <result property="signatureFilename" column="signature_filename"/>
+        <result property="active" column="active"/>
+        <result property="systemAccount" column="system_account"/>
+        <result property="contractor" column="contractor"/>
+        <result property="memberOrder" column="member_order"/>
+        <result property="otpSecret" column="otp_secret"/>
+        <result property="otpEnabled" column="otp_enabled"/>
+        <result property="mustChangePassword" column="must_change_password"/>
+    </resultMap>
+
+    <select id="findByUsername" resultMap="UserAccountMap">
+        SELECT <include refid="UserColumns"/>
+        FROM users u
+        LEFT JOIN teams t ON t.id = u.team_id
+        WHERE u.username = #{username}
+    </select>
+
+    <select id="findByEmployeeNumber" resultMap="UserAccountMap">
+        SELECT <include refid="UserColumns"/>
+        FROM users u
+        LEFT JOIN teams t ON t.id = u.team_id
+        WHERE u.employee_number = #{employeeNumber}
+    </select>
+
+    <select id="findById" resultMap="UserAccountMap">
+        SELECT <include refid="UserColumns"/>
+        FROM users u
+        LEFT JOIN teams t ON t.id = u.team_id
+        WHERE u.id = #{id}
+    </select>
+
+    <select id="findRolesByUserId" resultType="string">
+        SELECT role_code
+        FROM user_roles
+        WHERE user_id = #{userId}
+        ORDER BY role_code
+    </select>
+
+    <select id="findAllActive" resultMap="UserAccountMap">
+        SELECT <include refid="UserColumns"/>
+        FROM users u
+        LEFT JOIN teams t ON t.id = u.team_id
+        WHERE u.active = TRUE
+        ORDER BY t.display_order, u.name
+    </select>
+
+    <select id="findAll" resultMap="UserAccountMap">
+        SELECT <include refid="UserColumns"/>
+        FROM users u
+        LEFT JOIN teams t ON t.id = u.team_id
+        ORDER BY u.active DESC, t.display_order, u.name
+    </select>
+
+    <select id="findByTeamId" resultMap="UserAccountMap">
+        SELECT <include refid="UserColumns"/>
+        FROM users u
+        JOIN teams t ON t.id = u.team_id
+        WHERE u.active = TRUE
+          AND u.system_account = FALSE
+          AND u.team_id = #{teamId}
+        ORDER BY u.name
+    </select>
+
+    <select id="findByRole" resultMap="UserAccountMap">
+        SELECT <include refid="UserColumns"/>
+        FROM users u
+        LEFT JOIN teams t ON t.id = u.team_id
+        JOIN user_roles ur ON ur.user_id = u.id
+        WHERE u.active = TRUE
+          AND ur.role_code = #{roleCode}
+        ORDER BY u.id
+    </select>
+
+    <select id="findMemberStatuses" resultType="MemberStatus">
+        SELECT u.id AS user_id, u.name, u.dept, COALESCE(wr.submitted, FALSE) AS submitted
+        FROM users u
+        JOIN user_roles ur ON ur.user_id = u.id AND ur.role_code = 'EMPLOYEE'
+        LEFT JOIN weekly_reports wr ON wr.user_id = u.id AND wr.week_key = #{weekKey}
+        WHERE u.team_id = #{teamId}
+          AND u.active = TRUE
+        ORDER BY u.name
+    </select>
+
+    <!--
+      [BOOT-1] 최초 설치용 슈퍼관리자.
+        - 조직에 속하지 않는 시스템 계정(team_id NULL, system_account TRUE)이라 insertUser를 쓸 수 없다.
+        - 설치 시 운영자가 직접 비밀번호를 정하므로 must_change_password는 걸지 않는다.
+    -->
+    <insert id="insertSystemAdmin">
+        INSERT INTO users(username, password, name, team_id, active, system_account, must_change_password)
+        VALUES(#{username}, #{password}, #{name}, NULL, TRUE, TRUE, FALSE)
+    </insert>
+
+    <insert id="insertUser" parameterType="UserAccount" useGeneratedKeys="true" keyProperty="id">
+        <!-- 신규 직원은 관리자가 별도 전달하는 초기 비밀번호를 첫 로그인 후 변경한다. -->
+        INSERT INTO users(username, employee_number, password, name, team_id, dept, extension_number, mobile_number, job_title, grade_id, email, hire_date, must_change_password)
+        VALUES(#{username}, #{employeeNumber}, #{password}, #{name}, #{teamId}, #{dept}, #{extensionNumber}, #{mobileNumber}, #{jobTitle}, #{gradeId}, #{email}, #{hireDate}, TRUE)
+    </insert>
+
+    <update id="updateUser" parameterType="UserAccount">
+        UPDATE users
+        SET employee_number = #{employeeNumber},
+            name = #{name},
+            team_id = #{teamId},
+            dept = #{dept},
+            extension_number = #{extensionNumber},
+            mobile_number = #{mobileNumber},
+            job_title = #{jobTitle},
+            grade_id = #{gradeId},
+            email = #{email},
+            hire_date = #{hireDate},
+            resigned_on = #{resignedOn},
+            loa_start = #{loaStart},
+            loa_end = #{loaEnd},
+            active = #{active},
+            contractor = #{contractor}
+        WHERE id = #{id}
+    </update>
+
+    <select id="findOrderableMembers" resultMap="UserAccountMap">
+        SELECT <include refid="UserColumns"/>
+        FROM users u
+        LEFT JOIN teams t ON t.id = u.team_id
+        JOIN teams n ON n.id = #{teamId}
+        WHERE u.team_id = #{teamId}
+          AND u.active = TRUE
+          AND u.system_account = FALSE
+          AND (n.leader_user_id IS NULL OR u.id &lt;&gt; n.leader_user_id)
+        ORDER BY u.member_order, u.name
+    </select>
+
+    <update id="updateMemberOrder">
+        UPDATE users SET member_order = #{memberOrder} WHERE id = #{userId}
+    </update>
+
+    <update id="updateBasicInfo" parameterType="UserAccount">
+        UPDATE users
+        SET dept = #{dept},
+            extension_number = #{extensionNumber},
+            mobile_number = #{mobileNumber},
+            job_title = #{jobTitle},
+            email = #{email}
+        WHERE id = #{id}
+    </update>
+
+    <update id="updatePassword">
+        UPDATE users
+        SET password = #{password}
+        WHERE id = #{userId}
+    </update>
+
+    <!-- [UX35] 초기 비밀번호 강제 변경 플래그 -->
+    <update id="updateMustChangePassword">
+        UPDATE users
+        SET must_change_password = #{value}
+        WHERE id = #{userId}
+    </update>
+
+    <update id="updateOtp">
+        UPDATE users
+        SET otp_secret = #{otpSecret},
+            otp_enabled = #{otpEnabled}
+        WHERE id = #{userId}
+    </update>
+
+    <update id="updateUserTeam">
+        UPDATE users SET team_id = #{teamId} WHERE id = #{userId}
+    </update>
+
+    <update id="updateProfileImageFilename">
+        UPDATE users
+        SET profile_image_filename = #{profileImageFilename}
+        WHERE id = #{userId}
+    </update>
+
+    <update id="updateSignatureFilename">
+        UPDATE users
+        SET signature_filename = #{signatureFilename}
+        WHERE id = #{userId}
+    </update>
+
+    <select id="countActiveUsersByTeamId" resultType="int">
+        SELECT COUNT(*)
+        FROM users
+        WHERE team_id = #{teamId}
+          AND active = TRUE
+    </select>
+
+    <update id="deactivateUser">
+        UPDATE users
+        SET active = FALSE
+        WHERE id = #{userId}
+    </update>
+
+    <insert id="addRole">
+        INSERT IGNORE INTO user_roles(user_id, role_code)
+        VALUES(#{userId}, #{roleCode})
+    </insert>
+
+    <delete id="removeRole">
+        DELETE FROM user_roles
+        WHERE user_id = #{userId}
+          AND role_code = #{roleCode}
+    </delete>
+</mapper>

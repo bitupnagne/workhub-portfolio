@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>접근할 수 없어요 — 오피스 시스템</title>
+  <link rel="icon" type="image/svg+xml" th:href="@{/img/AppLogoMini.svg}">
+  <link rel="stylesheet" th:href="@{/css/worksystem.css}">
+  <!-- 페이지 이동 화면 전환 오류 정리 — 첫 화면 그리기 전에 실행돼야 해서 head 에 둔다 -->
+  <script th:src="@{/js/worksystem-view-transition.js}"></script>
+</head>
+<body class="ws-error-body">
+  <main class="ws-error-card">
+    <img class="ws-error-logo" th:src="@{/img/AppLogoMini.svg}" alt="">
+    <div class="ws-error-code">403</div>
+    <h1>이 화면에 접근할 수 없어요</h1>
+    <p>세션이 만료되었거나 접근 권한이 없는 화면입니다.<br>
+      <b><span data-count>5</span>초</b> 후 로그인 화면으로 이동합니다.</p>
+    <div class="ws-error-actions">
+      <a class="btn primary" href="/login?relogin=1">지금 로그인 화면으로</a>
+      <a class="btn" href="/">첫 화면으로</a>
+    </div>
+  </main>
+  <script>
+    (function () {
+      var n = 5, el = document.querySelector('[data-count]');
+      var t = setInterval(function () {
+        n -= 1;
+        if (el) el.textContent = n;
+        if (n <= 0) { clearInterval(t); window.location.href = '/login?relogin=1'; }
+      }, 1000);
+    })();
+  </script>
+</body>
+</html>

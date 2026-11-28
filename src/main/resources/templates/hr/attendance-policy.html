@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>근태 설정</title>
+  <link rel="icon" type="image/svg+xml" th:href="@{/img/AppLogoMini.svg}">
+  <link rel="stylesheet" th:href="@{/css/worksystem.css}">
+  <!-- 페이지 이동 화면 전환 오류 정리 — 첫 화면 그리기 전에 실행돼야 해서 head 에 둔다 -->
+  <script th:src="@{/js/worksystem-view-transition.js}"></script>
+</head>
+<body>
+<div class="app">
+  <div th:replace="~{fragments/app :: sidebar}"></div>
+  <main>
+    <div th:replace="~{fragments/app :: topbar}"></div>
+    <div class="content">
+      <div class="banner ok" th:if="${message}" th:text="${message}"></div>
+      <div class="banner err" th:if="${error}" th:text="${error}"></div>
+
+            <div class="admin-title-row"><div><h2>근태 설정</h2></div></div>
+
+      <div data-tabs="tab">
+        <div class="ws-tabs" role="tablist">
+          <button type="button" data-tab="hours" role="tab">근무시간</button>
+          <button type="button" data-tab="override" role="tab">특정일 예외 <span class="ws-tab-badge" th:if="${!#lists.isEmpty(overrides)}" th:text="${#lists.size(overrides)}">0</span></button>
+          <button type="button" data-tab="shift" role="tab">시차출근 조</button>
+          <button type="button" data-tab="leave" role="tab">휴가 종류</button>
+        </div>
+        <div data-tab-panel="hours" role="tabpanel">
+        <section class="section-block policy-section">
+          <div class="section-header no-caret"><div class="section-left"><span class="sname">기본 근무시간</span></div></div>
+          <form th:action="@{/hr/attendance/settings}" method="post" data-edit-form data-edit-title="기본 근무시간">
+              <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+              <div class="policy-form-body">
+                <label class="field">출근 기준
+                  <input type="time" name="defaultStartTime" th:value="${attendanceSetting.defaultStartTime}" required>
+                </label>
+                <label class="field">퇴근 기준
+                  <input type="time" name="defaultEndTime" th:value="${attendanceSetting.defaultEndTime}" required>
+                </label>
+              </div>
+              <div class="policy-form-foot">
+                <button class="btn primary" type="submit">저장</button>
+              </div>
+            </form>
+        </section>
+        <section class="section-block policy-section">
+          <div class="section-header no-caret"><div class="section-left"><span class="sname">요일별 근무시간표</span></div></div>
+          <form th:action="@{/hr/attendance/week-schedule}" method="post" data-edit-form data-edit-title="요일별 근무시간표">
+              <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+              <div class="policy-form-body">
+                <p class="muted" style="margin:0 0 8px;font-size:12px;">반일은 시각 미입력 시 출근 후 4시간 · 시각을 비우면 기본 근무시간 적용</p>
+                <div class="table-scroll">
+                  <table class="rt board-table">
+                    <thead><tr><th>요일</th><th>근무 구분</th><th>출근</th><th>퇴근</th></tr></thead>
+                    <tbody>
+                      <tr th:each="day, it : ${weekDays}">
+                        <td th:text="${day.dayLabel()}">월</td>
+                        <td>
+                          <input type="hidden" th:name="|days[${it.index}].dayOfWeek|" th:value="${day.dayOfWeek}">
+                          <select class="mini-input" th:name="|days[${it.index}].workType|">
+                            <option value="FULL" th:selected="${day.workType == 'FULL'}">전일</option>
+                            <option value="HALF" th:selected="${day.workType == 'HALF'}">반일</option>
+                            <option value="OFF" th:selected="${day.workType == 'OFF'}">휴무</option>
+                          </select>
+                        </td>
+                        <td><input class="mini-input" type="time" th:name="|days[${it.index}].startTime|" th:value="${day.startTime}"></td>
+                        <td><input class="mini-input" type="time" th:name="|days[${it.index}].endTime|" th:value="${day.endTime}"></td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              <div class="policy-form-foot">
+                <button class="btn primary" type="submit">저장</button>
+              </div>
+            </form>
+        </section>
+        </div>
+        <div data-tab-panel="override" role="tabpanel" hidden>
+        <section class="section-block policy-section">
+          <div class="section-header no-caret"><div class="section-left"><span class="sname">특정일 근무시간</span></div><div class="section-actions"><button class="btn primary" type="button" data-modal-open="#modalOverrideCreate"><svg th:replace="~{fragments/icons :: i('add')}"></svg> 예외 추가</button></div></div>
+          <div class="policy-form-body">
+                    <div class="table-scroll" th:if="${!#lists.isEmpty(overrides)}">
+                      <table class="rt board-table">
+                        <thead><tr><th>일자</th><th>근무시간</th><th>메모</th><th style="width:60px"></th></tr></thead>
+                        <tbody>
+                          <tr th:each="override : ${overrides}">
+                            <td th:text="${override.workDate}">2026-12-24</td>
+                            <td th:text="|${#temporals.format(override.startTime, 'HH:mm')} ~ ${#temporals.format(override.endTime, 'HH:mm')}|">09:00 ~ 13:00</td>
+                            <td class="muted" th:text="${override.note ?: '-'}">전사 행사</td>
+                            <td>
+                              <form th:action="@{/hr/attendance/override/delete}" method="post"
+                                    data-confirm-message="이 날의 근무시간 예외를 지우시겠습니까?" data-confirm-ok="삭제" data-confirm-danger="true">
+                                <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                                <input type="hidden" name="workDate" th:value="${override.workDate}">
+                                <button class="rbtn del" type="submit" aria-label="삭제"><svg th:replace="~{fragments/icons :: i('delete')}"></svg></button>
+                              </form>
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                    <p class="muted" th:if="${#lists.isEmpty(overrides)}">등록된 예외가 없습니다.</p>
+                  </div>
+        </section>
+        </div>
+        <div data-tab-panel="shift" role="tabpanel" hidden>
+        <section class="section-block policy-section">
+          <div class="section-header no-caret"><div class="section-left"><span class="sname">시차출근 조</span></div></div>
+          <form th:action="@{/hr/shift-groups/save-all}" method="post" data-edit-form data-edit-restore-dom data-edit-title="시차출근 조">
+              <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+              <div class="policy-form-body">
+                <p class="muted" style="margin:0 0 8px;font-size:12px;">시각을 둘 다 비우면 기본 근무시간을 따릅니다.</p>
+                <div class="table-scroll">
+                  <!-- 열 폭을 colgroup 으로 고정한다 — 설정 모달이 width:fit-content 라서, 행마다 칸 폭이
+                       달라지면 모달 자체가 넓어졌다 좁아졌다 한다(행 추가할 때 화면이 확대되던 원인). -->
+                  <table class="rt board-table pset-edit-table">
+                    <colgroup>
+                      <col style="width:72px"><col><col style="width:104px"><col style="width:104px">
+                      <col style="width:84px"><col style="width:64px"><col style="width:36px">
+                    </colgroup>
+                    <thead><tr><th>코드</th><th>이름</th><th>출근</th><th>퇴근</th><th>상태</th><th>정렬</th><th><span class="sr-only-field">관리</span></th></tr></thead>
+                    <tbody id="shiftRows">
+                      <tr th:each="g, it : ${shiftGroups}">
+                        <td th:text="${g.code}">A</td>
+                        <td>
+                          <input type="hidden" th:name="|groups[${it.index}].id|" th:value="${g.id}">
+                          <input class="mini-input" th:name="|groups[${it.index}].label|" th:value="${g.label}" required>
+                        </td>
+                        <td><input class="mini-input" type="time" th:name="|groups[${it.index}].startTime|" th:value="${g.startTime}"></td>
+                        <td><input class="mini-input" type="time" th:name="|groups[${it.index}].endTime|" th:value="${g.endTime}"></td>
+                        <td>
+                          <select class="mini-input" th:name="|groups[${it.index}].active|">
+                            <option value="true" th:selected="${g.active}">사용</option>
+                            <option value="false" th:selected="${!g.active}">중지</option>
+                          </select>
+                        </td>
+                        <td><input class="mini-input" type="number" th:name="|groups[${it.index}].sortOrder|" th:value="${g.sortOrder}"></td>
+                        <td class="pset-act-cell"></td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                <button class="det-add-btn" type="button" data-add-row="#tplShiftRow" data-add-target="#shiftRows"
+                                  th:data-next-index="${#lists.size(shiftGroups)}">+ 조 추가</button>
+              </div>
+              <div class="policy-form-foot">
+                <button class="btn primary" type="submit">전체 저장</button>
+              </div>
+            </form>
+        </section>
+        </div>
+        <div data-tab-panel="leave" role="tabpanel" hidden>
+        <section class="section-block policy-section">
+          <div class="section-header no-caret"><div class="section-left"><span class="sname">휴가 종류</span></div></div>
+          <form th:action="@{/hr/leave-types/save-all}" method="post" data-edit-form data-edit-restore-dom data-edit-title="휴가 종류">
+              <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+              <div class="policy-form-body">
+                <p class="muted" style="margin:0 0 8px;font-size:12px;">중지한 종류는 신규 신청에서 숨겨집니다 · 아래 [+ 휴가 종류 추가]로 새 종류를 만들 수 있습니다.</p>
+                <div class="table-scroll">
+                  <!-- colgroup 으로 열 폭 고정 — 사유는 위 시차출근 조 표와 같다. -->
+                  <table class="rt board-table pset-edit-table">
+                    <colgroup>
+                      <col><col style="width:84px"><col style="width:92px"><col style="width:84px">
+                      <col style="width:84px"><col style="width:64px"><col style="width:36px">
+                    </colgroup>
+                    <thead><tr><th>이름</th><th>가중치</th><th>연차 차감</th><th>증빙</th><th>상태</th><th>정렬</th><th><span class="sr-only-field">관리</span></th></tr></thead>
+                    <tbody id="leaveTypeRows">
+                      <tr th:each="ltype, it : ${leaveTypeDefs}">
+                        <td>
+                          <input type="hidden" th:name="|types[${it.index}].code|" th:value="${ltype.code}">
+                          <input class="mini-input" th:name="|types[${it.index}].label|" th:value="${ltype.label}" required>
+                        </td>
+                        <td>
+                          <select class="mini-input" th:name="|types[${it.index}].dayWeight|"
+                                  th:disabled="${ltype.code == 'AM_HALF' or ltype.code == 'PM_HALF'}">
+                            <option value="1.0" th:selected="${!ltype.halfDay}">전일</option>
+                            <option value="0.5" th:selected="${ltype.halfDay}">반일</option>
+                          </select>
+                          <input type="hidden" th:name="|types[${it.index}].dayWeight|" value="0.5"
+                                 th:if="${ltype.code == 'AM_HALF' or ltype.code == 'PM_HALF'}">
+                        </td>
+                        <td>
+                          <select class="mini-input" th:name="|types[${it.index}].deductAnnual|">
+                            <option value="true" th:selected="${ltype.deductAnnual}">차감</option>
+                            <option value="false" th:selected="${!ltype.deductAnnual}">미차감</option>
+                          </select>
+                        </td>
+                        <td>
+                          <select class="mini-input" th:name="|types[${it.index}].evidenceRequired|">
+                            <option value="true" th:selected="${ltype.evidenceRequired}">필요</option>
+                            <option value="false" th:selected="${!ltype.evidenceRequired}">불필요</option>
+                          </select>
+                        </td>
+                        <td>
+                          <select class="mini-input" th:name="|types[${it.index}].active|">
+                            <option value="true" th:selected="${ltype.active}">사용</option>
+                            <option value="false" th:selected="${!ltype.active}">중지</option>
+                          </select>
+                        </td>
+                        <td><input class="mini-input" type="number" th:name="|types[${it.index}].sortOrder|" th:value="${ltype.sortOrder}"></td>
+                        <td class="pset-act-cell"></td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                <button class="det-add-btn" type="button" data-add-row="#tplLeaveTypeRow" data-add-target="#leaveTypeRows"
+                        th:data-next-index="${#lists.size(leaveTypeDefs)}">+ 휴가 종류 추가</button>
+              </div>
+              <div class="policy-form-foot">
+                <button class="btn primary" type="submit">전체 저장</button>
+              </div>
+            </form>
+        </section>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+
+
+
+<!-- ⚙ 시차출근 조 모달 -->
+<div class="schedule-edit-modal" data-settings-modal id="modalOverrideCreate" hidden>
+  <div class="schedule-edit-dialog compact" role="dialog" aria-modal="true" aria-labelledby="overrideCreateTitle">
+    <div class="schedule-edit-head">
+      <strong id="overrideCreateTitle">특정일 근무시간 등록</strong>
+      <button type="button" data-modal-close aria-label="닫기"><svg th:replace="~{fragments/icons :: i('close')}"></svg></button>
+    </div>
+    <form th:action="@{/hr/attendance/override}" method="post">
+      <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+      <div class="schedule-edit-body">
+        <label class="field">일자<input type="date" name="workDate" required></label>
+        <label class="field">출근<input type="time" name="startTime" required></label>
+        <label class="field">퇴근<input type="time" name="endTime" required></label>
+        <label class="field">메모<input name="note" placeholder="전사 행사"></label>
+      </div>
+      <div class="schedule-edit-foot">
+        <button class="btn primary" type="submit">등록</button>
+        <button class="rbtn" type="button" data-modal-close>취소</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+
+
+<script th:src="@{/js/worksystem-settings-modal.js}"></script>
+</body>
+</html>

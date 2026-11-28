@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>오피스 시스템 오류</title>
+  <link rel="icon" type="image/svg+xml" th:href="@{/img/AppLogoMini.svg}">
+  <link rel="stylesheet" th:href="@{/css/worksystem.css}">
+  <!-- 페이지 이동 화면 전환 오류 정리 — 첫 화면 그리기 전에 실행돼야 해서 head 에 둔다 -->
+  <script th:src="@{/js/worksystem-view-transition.js}"></script>
+</head>
+<body>
+<main class="content">
+  <div class="banner err" th:text="${message}">오류가 발생했습니다.</div>
+  <a class="btn primary" href="/">돌아가기</a>
+</main>
+</body>
+</html>

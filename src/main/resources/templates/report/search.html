@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title th:text="${title}">주간보고 검색</title>
+  <link rel="icon" type="image/svg+xml" th:href="@{/img/AppLogoMini.svg}">
+  <link rel="stylesheet" th:href="@{/css/worksystem.css}">
+  <!-- 페이지 이동 화면 전환 오류 정리 — 첫 화면 그리기 전에 실행돼야 해서 head 에 둔다 -->
+  <script th:src="@{/js/worksystem-view-transition.js}"></script>
+</head>
+<body>
+<div class="app">
+  <div th:replace="~{fragments/app :: sidebar}"></div>
+  <main>
+    <div th:replace="~{fragments/app :: topbar}"></div>
+    <div class="content" data-ws-query-contract="report-search-v1" data-ws-query-path="self" data-ws-query-params="q page">
+      <form data-ws-query-filter="search" class="search-form" th:action="@{/report/search}" method="get">
+        <div class="search-input-row">
+          <input class="search-input" id="search-input" name="q" th:value="${query}" autocomplete="off" placeholder="이름, 항목명, 세부항목명으로 검색...">
+          <a class="rbtn" th:href="@{/report/search}" data-ws-query-reset>초기화</a>
+        </div>
+        <div class="search-hint">기본으로 전체 주간보고를 표시합니다 · 검색어를 입력하면 전체 주차에서 항목명, 세부항목명, 이름을 검색합니다</div>
+      </form>
+      <div data-ws-query-region="search-results">
+
+      <div class="empty-search" th:if="${#lists.isEmpty(results)}" th:text="${#strings.isEmpty(query) ? '등록된 주간보고가 없습니다' : '검색 결과가 없습니다'}">검색 결과가 없습니다</div>
+
+      <div th:unless="${#lists.isEmpty(results)}">
+        <div class="search-result-hdr">
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="6.5" cy="6.5" r="4"></circle><line x1="10" y1="10" x2="14" y2="14"></line></svg>
+          <span>검색 결과</span>
+          <span class="search-result-meta" th:if="${#strings.isEmpty(query)}" th:text="|${#lists.size(results)}건 - ${searchScopeLabel}|">0건 - 전체</span>
+          <span class="search-result-meta" th:unless="${#strings.isEmpty(query)}" th:text="|${#lists.size(results)}건 - &quot;${query}&quot; ${searchScopeLabel} 검색|">0건 - 검색</span>
+        </div>
+        <div class="section-block">
+          <div class="table-scroll">
+          <table class="rt">
+            <thead>
+            <tr>
+              <th>#</th>
+              <th class="col-o" th:if="${showOwnerColumns}">팀</th>
+              <th class="col-o" th:if="${showOwnerColumns}">이름</th>
+              <th class="col-cy">주차</th>
+              <th style="width:50px">구분</th>
+              <th class="col-c">내용</th>
+              <th class="col-d">완료(예정)일</th>
+              <th class="col-s">상태</th>
+              <th style="width:110px">바로가기</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr class="mr" th:each="r, stat : ${results}">
+              <td th:text="${stat.count}">1</td>
+              <td th:if="${showOwnerColumns}"><span style="font-size:11px" th:text="${r.teamName}">팀</span></td>
+              <td th:if="${showOwnerColumns}">
+                <div class="owner-chip">
+                  <span th:text="${r.memberName}">홍길동</span>
+                </div>
+              </td>
+              <td><span class="date-mono week-label" th:text="${T(com.portfolio.worksystem.service.WeekUtils).getWeekLabel(r.weekKey)}">2026년 20주차</span></td>
+              <td><span class="stype-badge" th:classappend="${r.type == 'main'} ? ' stype-main' : ' stype-sub'" th:text="${r.type == 'main' ? '항목' : '세부'}">항목</span></td>
+              <td>
+                <span th:text="${r.content}">내용</span>
+                <div class="muted parent-info" th:if="${r.parentContent != null and !#strings.isEmpty(r.parentContent)}" th:text="|↳ ${r.parentContent}|">↳ 상위 항목</div>
+              </td>
+              <td><span class="date-mono" th:text="${r.dueDate != null ? r.dueDate : '—'}">2026-05-15</span></td>
+              <td><span class="status-pill" th:classappend="${' sp-' + #strings.toLowerCase(r.status.name())}" th:text="${r.status.label}">신규</span></td>
+              <td><a class="go-btn" th:href="${searchGoPath + '?week=' + r.weekKey}">주간보고 확인 <svg th:replace="~{fragments/icons :: i('arrow_forward')}"></svg></a></td>
+            </tr>
+            </tbody>
+          </table>
+          </div>
+          <div th:replace="~{fragments/app :: pagination(${pageInfo}, ${pageBaseUrl})}"></div>
+        </div>
+      </div>
+      </div>
+    </div>
+  </main>
+</div>
+</body>
+</html>

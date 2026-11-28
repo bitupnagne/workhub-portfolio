@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title th:text="|${target.name} — HR 상세|">직원 상세</title>
+  <link rel="icon" type="image/svg+xml" th:href="@{/img/AppLogoMini.svg}">
+  <link rel="stylesheet" th:href="@{/css/worksystem.css}">
+  <!-- 페이지 이동 화면 전환 오류 정리 — 첫 화면 그리기 전에 실행돼야 해서 head 에 둔다 -->
+  <script th:src="@{/js/worksystem-view-transition.js}"></script>
+</head>
+<body>
+<div class="app">
+  <div th:replace="~{fragments/app :: sidebar}"></div>
+  <main>
+    <div th:replace="~{fragments/app :: topbar}"></div>
+    <div class="content member-detail-content" data-ws-query-contract="hr-members-detail-v1" data-ws-query-path="self" data-ws-query-params="from to" data-ws-query-context="default">
+      <div class="banner ok" th:if="${message}" th:text="${message}"></div>
+      <div class="banner err" th:if="${error}" th:text="${error}"></div>
+
+      <!-- [UX28] 모달(직원 상세)에서는 제목 줄 불필요 — data-app-form-strip.
+           [UX31] 본인 카드는 컨트롤러에서 /mypage로 리다이렉트되므로 self 분기 제거 -->
+      <div class="document-tabs" style="display:flex;align-items:center;gap:10px;" data-app-form-strip>
+        <a class="rbtn" th:href="@{/hr/members(from=${fromDate},to=${toDate})}"><svg th:replace="~{fragments/icons :: i('arrow_back')}"></svg> 목록으로</a>
+        <b style="font-size:16px;" th:text="|${target.name} 인사카드|">홍길동 인사카드</b>
+      </div>
+
+      <!-- [B5][UX33] 인사카드 기본정보 — 이력서형(증명사진 + 인적사항 표) -->
+      <section class="form-panel policy-card resume-card">
+        <div class="page-actions member-actions" data-app-form-strip>
+          <button class="rbtn" type="button" th:if="${canManageHr}" data-modal-open="#modalLoa">휴직 처리</button>
+          <button class="rbtn" type="button" th:if="${canManageHr}" data-modal-open="#modalResign">퇴사 처리</button>
+          <button class="rbtn del" type="button" th:if="${canManageOrganization and target.id != currentUser.userId}" data-modal-open="#modalEmpDelete">삭제</button>
+          <button class="btn primary" type="button" th:if="${canManageOrganization}" data-modal-open="#modalEmpEdit">정보 수정</button>
+        </div>
+        <div class="resume-head">
+          <div class="resume-photo">
+            <span class="user-avt resume-avt" th:if="${#strings.isEmpty(target.profileImageFilename)}"
+                  th:text="${#strings.substring(target.name, 0, target.name.length() > 1 ? 2 : 1)}">직원</span>
+            <img class="resume-avt" th:unless="${#strings.isEmpty(target.profileImageFilename)}"
+                 th:src="@{/profile-images/{f}(f=${target.profileImageFilename})}" alt="">
+          </div>
+          <div class="resume-title">
+            <h2 th:text="${target.name}">홍길동</h2>
+            <span class="status-pill" th:classappend="${!target.active} ? ' danger' : (${target.onLeaveToday} ? ' warn' : ' ok')"
+                  th:text="${target.employmentStatusLabel}">재직</span>
+            <span class="readonly-badge" th:if="${target.contractor}">도급</span>
+            <p class="resume-sub" th:text="|${target.teamName ?: '소속 없음'} · ${target.dept ?: '-'}${target.jobTitle != null ? ' · ' + target.jobTitle : ''}|">개발팀 · 백엔드</p>
+            <div class="resume-meta">
+              <span>사번 <b th:text="${target.employeeNumber ?: '-'}">EMP-00001</b></span>
+              <span>입사일 <b th:text="${target.hireDate ?: '-'}">2026-01-01</b></span>
+              <span>올해 연차 잔여 <b th:text="|${targetRemainingLeave}일|">15일</b></span>
+            </div>
+          </div>
+        </div>
+        <dl class="resume-table">
+          <dt>로그인 ID</dt><dd th:text="${target.username}">username</dd>
+          <dt>이메일</dt><dd th:text="${target.email ?: '-'}">이메일</dd>
+          <dt>소속 / 부서</dt><dd th:text="|${target.teamName ?: '-'} / ${target.dept ?: '-'}|">소속</dd>
+          <dt>담당업무</dt><dd th:text="${target.jobTitle ?: '-'}">담당업무</dd>
+          <dt>등급</dt><dd th:text="${target.gradeName ?: '미지정'}">등급</dd>
+          <dt>권한</dt><dd><span class="role-chip" th:text="${T(com.portfolio.worksystem.util.RoleLabels).labels(target.roles)}">직원</span></dd>
+          <dt>연락처</dt><dd th:text="|내선 ${target.extensionNumber ?: '-'} / 휴대폰 ${target.mobileNumber ?: '-'}|">연락처</dd>
+          <dt>결재 서명</dt><dd th:text="${#strings.isEmpty(target.signatureFilename) ? '미등록' : '등록됨'}">등록됨</dd>
+          <dt>재직상태</dt>
+          <dd class="resume-span">
+            <span class="status-pill" th:classappend="${!target.active} ? ' danger' : (${target.onLeaveToday} ? ' warn' : ' ok')"
+                  th:text="${target.employmentStatusLabel}">재직</span>
+            <span class="muted" th:if="${target.loaStart != null}"
+                  th:text="|휴직 ${target.loaStart} ~ ${target.loaEnd ?: '미정'}|">휴직 기간</span>
+          </dd>
+        </dl>
+      </section>
+
+
+
+      <div data-tabs="tab" class="member-tabs">
+        <div class="ws-tabs" role="tablist">
+          <button type="button" data-tab="attendance" role="tab">근태·휴가</button>
+          <button type="button" data-tab="history" role="tab">인사 이력</button>
+        </div>
+        <div data-tab-panel="attendance" role="tabpanel">
+      <form class="filter-panel" method="get" th:action="@{/hr/members/{id}(id=${target.id})}" data-ws-query-filter="filter-0">
+        <input class="mini-input att-date-input" type="date" name="from" th:value="${fromDate}" aria-label="시작일">
+        <input class="mini-input att-date-input" type="date" name="to" th:value="${toDate}" aria-label="종료일">
+        <a class="btn" th:href="@{/hr/members/{id}(id=${target.id})}" data-ws-query-reset="">초기화</a>
+      </form>
+
+      <section class="section-block member-leave-section m-acc" data-ws-query-region="date-results-0">
+        <div class="section-header no-caret">
+          <div class="section-left"><span class="sdot sdot-new"></span><span class="sname">휴가 내역</span><span class="scnt scnt-new" th:text="${leaveTotal}">0</span></div>
+        </div>
+        <div class="table-scroll">
+          <table class="rt board-table compact-hr-table">
+            <thead><tr><th>종류</th><th>기간</th><th>일수</th><th>상태</th><th>사유</th><th>문서</th></tr></thead>
+            <tbody>
+            <tr class="empty-tr" th:if="${#lists.isEmpty(leaveList)}"><td colspan="6">기간 내 휴가 내역이 없습니다.</td></tr>
+            <tr th:each="lr : ${leaveList}">
+              <td th:text="${lr.type != null ? lr.typeLabel : '-'}">연차</td>
+              <td th:text="|${lr.startDate} ~ ${lr.endDate}|">기간</td>
+              <td th:text="|${lr.days}일|">0일</td>
+              <td><span class="status-pill" th:text="${lr.status != null ? lr.status.label : '-'}">상태</span></td>
+              <td th:text="${lr.reason}">사유</td>
+              <td><a class="rbtn acc" th:href="@{|/hr/leave/${lr.id}/document|}" data-doc-popup target="_blank" rel="noopener">문서 열기</a></td>
+            </tr>
+            </tbody>
+          </table>
+        </div>
+        <div th:replace="~{fragments/app :: pagination(${leavePageInfo}, ${leavePageBaseUrl})}"></div>
+      </section>
+
+      <section class="section-block m-acc" data-ws-query-region="date-results-1">
+        <div class="section-header no-caret">
+          <div class="section-left"><span class="sdot sdot-new"></span><span class="sname">시차출근 내역</span><span class="scnt scnt-new" th:text="${flexTotal}">0</span></div>
+        </div>
+        <div class="table-scroll">
+          <table class="rt board-table compact-hr-table">
+            <thead><tr><th>시차 그룹</th><th>기간</th><th>상태</th><th>사유</th><th>문서</th></tr></thead>
+            <tbody>
+            <tr class="empty-tr" th:if="${#lists.isEmpty(flexList)}"><td colspan="5">기간 내 시차 신청 내역이 없습니다.</td></tr>
+            <tr th:each="f : ${flexList}">
+              <td th:text="${f.shiftGroupDisplay}">조</td>
+              <td th:text="|${f.startDate} ~ ${f.endDate}|">기간</td>
+              <td><span class="status-pill" th:text="${f.status != null ? f.status.label : '-'}">상태</span></td>
+              <td th:text="${f.reason}">사유</td>
+              <td><a class="rbtn acc" th:href="@{|/hr/flex-time/${f.id}/document|}" data-doc-popup target="_blank" rel="noopener">문서 열기</a></td>
+            </tr>
+            </tbody>
+          </table>
+        </div>
+        <div th:replace="~{fragments/app :: pagination(${flexPageInfo}, ${flexPageBaseUrl})}"></div>
+      </section>
+
+      <section class="section-block m-acc" data-ws-query-region="date-results-2">
+        <div class="section-header no-caret">
+          <div class="section-left"><span class="sdot sdot-new"></span><span class="sname">출장 내역</span><span class="scnt scnt-new" th:text="${tripTotal}">0</span></div>
+        </div>
+        <div class="table-scroll">
+          <table class="rt board-table compact-hr-table">
+            <thead><tr><th>출장지</th><th>기간</th><th>상태</th><th>목적</th><th>문서</th></tr></thead>
+            <tbody>
+            <tr class="empty-tr" th:if="${#lists.isEmpty(tripList)}"><td colspan="5">기간 내 출장 내역이 없습니다.</td></tr>
+            <tr th:each="t : ${tripList}">
+              <td th:text="${t.destination}">출장지</td>
+              <td th:text="|${t.startDate} ~ ${t.endDate}|">기간</td>
+              <td><span class="status-pill" th:text="${t.status != null ? t.status.label : '-'}">상태</span></td>
+              <td th:text="${t.purpose}">목적</td>
+              <td><a class="rbtn acc" th:href="@{|/hr/trips/${t.id}/document|}" data-doc-popup target="_blank" rel="noopener">문서 열기</a></td>
+            </tr>
+            </tbody>
+          </table>
+        </div>
+        <div th:replace="~{fragments/app :: pagination(${tripPageInfo}, ${tripPageBaseUrl})}"></div>
+      </section>
+
+      <section class="section-block member-attendance-section" id="member-attendance-history"
+               th:fragment="memberAttendance" th:data-member-attendance-url="${memberAttendanceUrl}" data-ws-query-region="date-results-3" data-ws-query-reconcile="member-attendance" data-ws-query-meta="attendance-canonical" data-ws-query-meta-attrs="data-member-attendance-url">
+        <div class="section-header no-caret">
+          <div class="section-left"><span class="sdot sdot-new"></span><span class="sname">근태 내역</span><span class="scnt scnt-new" th:text="${attendanceTotal}">0</span></div>
+        </div>
+        <div class="attendance-history-status" data-member-attendance-status role="status" aria-live="polite" hidden>
+          <span data-member-attendance-message></span>
+          <button class="rbtn" type="button" data-member-attendance-retry hidden>다시 시도</button>
+          <a class="rbtn" data-member-attendance-fallback hidden>전체 화면으로 열기</a>
+        </div>
+        <!-- 상태 필터와 페이지 이동은 이 근태 영역만 교체한다. -->
+        <nav class="document-tabs ws-segmented" aria-label="근태 상태 필터" style="margin-bottom:8px;">
+          <a th:href="${attendanceFilterBaseUrl}"
+             th:classappend="${#strings.isEmpty(attendanceStatusFilter)} ? 'active'"
+             th:attr="aria-current=${#strings.isEmpty(attendanceStatusFilter) ? 'page' : null}">전체</a>
+          <a th:each="st : ${attendanceStatuses}"
+             th:href="${attendanceFilterBaseUrl + st.name()}"
+             th:classappend="${attendanceStatusFilter == st.name()} ? 'active'"
+             th:attr="aria-current=${attendanceStatusFilter == st.name() ? 'page' : null}"
+             th:text="${st.label}">정상</a>
+        </nav>
+        <div class="table-scroll">
+          <table class="rt board-table compact-hr-table">
+            <thead><tr><th>일자</th><th>기준</th><th>출근</th><th>퇴근</th><th>상태</th></tr></thead>
+            <tbody>
+            <tr class="empty-tr" th:if="${#lists.isEmpty(attendanceList)}"><td colspan="5">기간 내 근태 기록이 없습니다.</td></tr>
+            <tr th:each="a : ${attendanceList}">
+              <td th:text="${a.workDate}">일자</td>
+              <td th:text="|${#temporals.format(a.startTime, 'HH:mm')}~${#temporals.format(a.endTime, 'HH:mm')}|">09:00~18:00</td>
+              <td th:text="${a.checkInAt == null ? '-' : #temporals.format(a.checkInAt, 'HH:mm')}">09:00</td>
+              <td th:text="${a.checkOutAt == null ? '-' : #temporals.format(a.checkOutAt, 'HH:mm')}">18:00</td>
+              <td>
+                <span th:if="${a.status != null and a.status.name() == 'HOLIDAY'}" class="att-status-text holiday"
+                      th:text="${a.scheduleNote != null and a.scheduleNote != '기본'} ? |휴무(${a.scheduleNote})| : '휴무'">휴무</span>
+                <span th:unless="${a.status != null and a.status.name() == 'HOLIDAY'}" class="att-status-dot-wrap">
+                  <span class="att-status-dot"
+                        th:classappend="${a.status != null and a.status.name() == 'NORMAL'} ? ' normal' : (${a.status != null and a.status.name() == 'ABSENT'} ? ' absent' : (${a.status != null and (a.status.name() == 'LATE' or a.status.name() == 'EARLY_LEAVE')} ? ' warn' : ' pending'))"></span>
+                  <span th:text="${a.status != null ? a.status.label : '-'}">정상</span>
+                </span>
+              </td>
+            </tr>
+            </tbody>
+          </table>
+        </div>
+        <div th:replace="~{fragments/app :: pagination(${attendancePageInfo}, ${attendancePageBaseUrl})}"></div>
+      </section>
+
+        </div>
+        <div data-tab-panel="history" role="tabpanel" hidden>
+      <!-- [B9] 인사정보 변경이력 — 누가 언제 무엇을 무엇으로 바꿨는지. -->
+      <section class="section-block m-acc">
+        <div class="section-header no-caret">
+          <div class="section-left">
+            <span class="sdot sdot-done"></span><span class="sname">인사정보 변경이력</span>
+            <span class="scnt scnt-done" th:text="${changeLogTotal}">0</span>
+          </div>
+        </div>
+        <div class="table-scroll">
+          <table class="rt admin-data-table no-mcard">
+            <thead>
+            <tr><th style="width:150px">시각</th><th style="width:130px">항목</th><th>변경 내용</th>
+                <th style="width:150px">경로</th><th style="width:110px">수정자</th></tr>
+            </thead>
+            <tbody>
+            <tr class="empty-tr" th:if="${#lists.isEmpty(changeLogs)}">
+              <td colspan="5">변경 이력이 없습니다. 이 기능이 들어간 뒤의 변경부터 기록됩니다.</td>
+            </tr>
+            <tr th:each="l : ${changeLogs}">
+              <td class="muted" th:text="${#temporals.format(l.changedAt, 'yyyy-MM-dd HH:mm')}">2026-09-07 10:00</td>
+              <td th:text="${l.fieldLabel}">소속</td>
+              <td>
+                <span class="muted" th:text="${l.oldText}">이전</span>
+                <span style="margin:0 6px"><svg th:replace="~{fragments/icons :: i('arrow_forward')}"></svg></span>
+                <b th:text="${l.newText}">이후</b>
+              </td>
+              <td class="muted" th:text="${l.sourceLabel}">관리자 (직원관리)</td>
+              <td th:text="${l.changedByName ?: '시스템'}">홍길동</td>
+            </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- [B5] 발령·소속 이동 이력 (personnel_transfers) -->
+      <section class="section-block m-acc" th:if="${!#lists.isEmpty(transferHistory)}">
+        <div class="section-header no-caret">
+          <div class="section-left"><span class="sdot sdot-done"></span><span class="sname">발령 이력</span><span class="scnt scnt-done" th:text="${#lists.size(transferHistory)}">0</span></div>
+        </div>
+        <div class="table-scroll">
+          <table class="rt board-table compact-hr-table">
+            <thead><tr><th>발령일</th><th>이동</th><th>상태</th><th>등록자</th></tr></thead>
+            <tbody>
+            <tr th:each="tr : ${transferHistory}">
+              <td><span class="date-mono" th:text="${tr.effectiveDate}">발령일</span></td>
+              <td th:text="|${tr.fromTeamName ?: '-'} → ${tr.toTeamName ?: '-'}|">이동</td>
+              <td><span class="status-pill" th:classappend="${tr.applied} ? ' ok' : ''"
+                        th:text="${tr.applied ? '반영됨' : '예약'}">반영됨</span></td>
+              <td th:text="${tr.createdByName ?: '-'}">등록자</td>
+            </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div class="schedule-edit-modal" data-settings-modal data-modal-size="compact" id="modalResign" hidden th:if="${canManageHr}">
+  <div class="schedule-edit-dialog compact" role="dialog" aria-modal="true" aria-labelledby="modalResignTitle">
+    <div class="schedule-edit-head"><strong id="modalResignTitle">퇴사 처리</strong><button type="button" data-modal-close aria-label="닫기"><svg th:replace="~{fragments/icons :: i('close')}"></svg></button></div>
+    <div class="schedule-edit-body">
+        <form class="admin-form-panel" th:action="@{/hr/members/{id}/resign(id=${target.id})}" method="post" data-edit-form data-edit-title="퇴사 정보"
+              data-confirm-message="퇴사 처리하면 그 해 연차가 재직 기간에 비례해 다시 계산됩니다. 계속하시겠습니까?"
+              data-confirm-ok="처리" data-confirm-danger="true">
+          <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+          <div class="admin-form-grid">
+            <div class="field">
+              <label for="resignedOn">퇴사일</label>
+              <input id="resignedOn" type="date" name="resignedOn" th:value="${target.resignedOn}">
+            </div>
+            <div class="field">
+              <label class="check-label" for="deactivate">
+                <input id="deactivate" type="checkbox" name="deactivate" value="true" checked>
+                계정도 함께 비활성
+              </label>
+            </div>
+          </div>
+          <p class="muted">퇴사일을 비우면 퇴사 취소입니다.</p>
+          <div class="form-actions">
+            <button class="btn primary" type="submit">퇴사 처리</button>
+          </div>
+        </form>
+    </div>
+  </div>
+</div>
+<div class="schedule-edit-modal" data-settings-modal id="modalLoa" hidden th:if="${canManageHr}">
+  <div class="schedule-edit-dialog" role="dialog" aria-modal="true" aria-labelledby="modalLoaTitle">
+    <div class="schedule-edit-head"><strong id="modalLoaTitle">휴직 처리</strong><button type="button" data-modal-close aria-label="닫기"><svg th:replace="~{fragments/icons :: i('close')}"></svg></button></div>
+    <div class="schedule-edit-body">
+        <form class="admin-form-panel" th:action="@{/hr/members/{id}/loa(id=${target.id})}" method="post" data-edit-form data-edit-title="휴직 정보"
+              data-confirm-message="이 직원의 재직상태를 변경합니다. 계속하시겠습니까?" data-confirm-ok="변경">
+          <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+          <div class="admin-form-grid">
+            <div class="field">
+              <label for="loaType">휴직 종류</label>
+              <select id="loaType" name="type">
+                <option th:each="t : ${loaTypes}" th:value="${t.code}"
+                        th:selected="${t.code == target.loaType}"
+                        th:text="${t.label + ' — ' + t.treatmentLabel}">육아휴직</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="loaStart">시작일</label>
+              <input id="loaStart" type="date" name="startDate" th:value="${target.loaStart}">
+            </div>
+            <div class="field">
+              <label for="loaEnd">종료일 (복직 예정일)</label>
+              <input id="loaEnd" type="date" name="endDate" th:value="${target.loaEnd}">
+            </div>
+          </div>
+          <p class="muted">시작일을 비우면 복직 처리입니다.</p>
+          <div class="form-actions">
+            <button class="btn primary" type="submit">재직상태 변경</button>
+          </div>
+        </form>
+        <div class="table-scroll" th:if="${!#lists.isEmpty(loaHistory)}">
+          <table class="rt admin-data-table no-mcard">
+            <thead><tr><th>종류</th><th>기간</th><th>연차 반영</th><th>상태</th></tr></thead>
+            <tbody>
+              <tr th:each="r : ${loaHistory}">
+                <td th:text="${r.typeLabel}">육아휴직</td>
+                <td th:text="${r.periodText}">기간</td>
+                <td th:text="${r.accrualTreatment == 'EXCLUDED'} ? '비례 삭감' : '출근 간주'">출근 간주</td>
+                <td th:text="${r.status.label}">승인</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+    </div>
+  </div>
+</div>
+<div class="schedule-edit-modal" data-settings-modal data-modal-size="compact" id="modalEmpDelete" hidden th:if="${canManageOrganization and target.id != currentUser.userId}">
+  <div class="schedule-edit-dialog compact" role="dialog" aria-modal="true" aria-labelledby="modalEmpDeleteTitle">
+    <div class="schedule-edit-head"><strong id="modalEmpDeleteTitle">직원 삭제</strong><button type="button" data-modal-close aria-label="닫기"><svg th:replace="~{fragments/icons :: i('close')}"></svg></button></div>
+    <div class="schedule-edit-body">
+        <form th:action="@{/admin/users/{id}/delete(id=${target.id})}" method="post" class="pset-inline-form"
+              data-confirm-message="이 직원을 삭제하시겠습니까? 계정은 비활성 처리됩니다." data-confirm-ok="삭제" data-confirm-danger="true">
+          <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+          <span class="muted" style="flex:1;">계정은 비활성 처리되고 조직장 지정도 해제됩니다.</span>
+          <button class="btn danger" type="submit">직원 삭제</button>
+        </form>
+    </div>
+  </div>
+</div>
+<!-- [UX12] 정보 수정 모달 — 구 admin/user-edit 화면 흡수(수정·서명·삭제) -->
+<div class="schedule-edit-modal" data-settings-modal id="modalEmpEdit" hidden th:if="${canManageOrganization}">
+  <div class="schedule-edit-dialog" role="dialog" aria-modal="true">
+    <div class="schedule-edit-head">
+      <strong th:text="|${target.name} 정보 수정|">정보 수정</strong>
+      <button type="button" data-modal-close aria-label="닫기"><svg th:replace="~{fragments/icons :: i('close')}"></svg></button>
+    </div>
+    <form th:action="@{/admin/users/update}" method="post" data-edit-form data-edit-title="직원 정보">
+      <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+      <input type="hidden" name="returnTo" value="hr-card">
+      <input type="hidden" name="id" th:value="${target.id}">
+      <div class="schedule-edit-body">
+        <div class="form-section-title">계정 정보</div>
+        <div class="admin-form-grid">
+          <div class="field"><label>로그인 ID</label><input th:value="${target.username}" disabled></div>
+          <div class="field"><label>사번</label><input name="employeeNumber" th:value="${target.employeeNumber}"></div>
+          <div class="field"><label>이름</label><input name="name" th:value="${target.name}" required></div>
+          <div class="field"><label>입사일</label><input name="hireDate" type="date" th:value="${target.hireDate}"></div>
+          <div class="field">
+            <label>직급</label>
+            <select name="gradeId">
+              <option value="" th:selected="${target.gradeId == null}">미지정</option>
+              <option th:each="g : ${editGrades}" th:value="${g.id}" th:selected="${g.id == target.gradeId}"
+                      th:text="${g.name + (g.active ? '' : ' (비활성)')}">1급</option>
+            </select>
+          </div>
+          <div class="field span-2"><label>권한</label><div class="readonly-field" th:text="${#strings.listJoin(target.roles, ', ')}">EMPLOYEE</div></div>
+        </div>
+
+        <div class="form-section-title">소속 정보</div>
+        <div class="admin-form-grid">
+          <div class="field">
+            <label>소속 (팀/본부)</label>
+            <select name="teamId">
+              <option value="" th:selected="${target.teamId == null}">소속 없음</option>
+              <option th:each="team : ${editTeams}" th:value="${team.id}" th:selected="${team.id == target.teamId}"
+                      th:text="${team.nodeType == 'DIVISION' ? team.name + ' (본부)' : team.name}">팀</option>
+            </select>
+          </div>
+          <div class="field"><label>부서/직무</label><input name="dept" th:value="${target.dept}" required></div>
+          <div class="field"><label>휴직 시작일</label><input name="loaStart" type="date" th:value="${target.loaStart}"></div>
+          <div class="field"><label>휴직 종료일 (미정이면 비움)</label><input name="loaEnd" type="date" th:value="${target.loaEnd}"></div>
+          <input type="hidden" name="_active" value="on">
+          <label class="check-label switch-label">
+            <input type="checkbox" name="active" value="true" th:checked="${target.active}">
+            <span class="switch-ui" aria-hidden="true"></span><span class="switch-text">재직 상태 유지</span>
+          </label>
+          <input type="hidden" name="_contractor" value="on">
+          <label class="check-label switch-label">
+            <input type="checkbox" name="contractor" value="true" th:checked="${target.contractor}">
+            <span class="switch-ui" aria-hidden="true"></span><span class="switch-text">도급 (우측 패널에서 온라인·근무상태·1:1 숨김)</span>
+          </label>
+        </div>
+
+        <div class="form-section-title">연락처 및 업무</div>
+        <div class="admin-form-grid">
+          <div class="field"><label>내선번호</label><input name="extensionNumber" th:value="${target.extensionNumber}"></div>
+          <div class="field"><label>핸드폰번호</label><input name="mobileNumber" th:value="${target.mobileNumber}"></div>
+          <div class="field"><label>담당업무</label><input name="jobTitle" th:value="${target.jobTitle}"></div>
+          <div class="field"><label>이메일</label><input name="email" type="email" th:value="${target.email}"></div>
+        </div>
+        <p class="muted" style="font-size:11px;">팀장 지정은 조직 관리에서 저장합니다. 팀장이 다른 소속으로 이동하면 기존 팀장 지정은 해제됩니다.</p>
+      </div>
+      <div class="schedule-edit-foot">
+        <button class="btn primary" type="submit">저장</button>
+        <button class="rbtn" type="button" data-modal-close>취소</button>
+      </div>
+    </form>
+
+    <div class="schedule-edit-body pset-subform">
+      <div class="form-section-title">결재 서명</div>
+      <div th:if="${!#strings.isEmpty(employeeSignature)}" style="margin:6px 0;">
+        <img th:src="@{/signature-images/{f}(f=${employeeSignature})}" alt="직원 서명"
+             style="max-width:240px;max-height:100px;border:1px solid var(--border);border-radius:8px;background:#fff;padding:6px">
+        <form th:action="@{/admin/users/{id}/signature/delete(id=${target.id})}" method="post" style="margin-top:6px;">
+          <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+          <button class="rbtn del" type="submit">서명 삭제</button>
+        </form>
+      </div>
+      <form class="pset-inline-form" th:action="@{/admin/users/{id}/signature(id=${target.id})}" method="post" enctype="multipart/form-data">
+        <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+        <label class="file-btn">이미지 선택<input class="file-input" type="file" name="signature" accept="image/png,image/jpeg,image/webp"></label>
+        <button class="btn" type="submit">서명 업로드</button>
+        <span class="muted" style="font-size:11px;">PNG·JPG·WebP, 1MB 이하</span>
+      </form>
+    </div>
+
+    <!-- [UX35] 인사카드의 비밀번호/OTP 관리는 관리자 전용 — 본인 변경은 마이페이지에서 -->
+    <div class="schedule-edit-body pset-subform" th:if="${canManageOrganization and target.id != currentUser.userId}">
+      <div class="form-section-title">비밀번호 초기화</div>
+      <form th:action="@{/admin/users/{id}/password-reset(id=${target.id})}" method="post" class="pset-inline-form"
+            data-confirm-message="이 직원의 비밀번호를 관리자가 설정한 초기 비밀번호로 초기화할까요? 다음 로그인 시 변경이 강제됩니다."
+            data-confirm-ok="초기화">
+        <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+        <span class="muted" style="font-size:11px;flex:1;">초기 비밀번호는 관리자가 안전한 경로로 별도 전달합니다. 직원이 초기 비밀번호로 로그인하면 변경 모달이 강제로 표시됩니다.</span>
+        <button class="btn" type="submit">비밀번호 초기화</button>
+      </form>
+      <div class="form-section-title" style="margin-top:12px;">OTP(2차 인증) 초기화</div>
+      <form th:action="@{/admin/users/{id}/otp-reset(id=${target.id})}" method="post" class="pset-inline-form"
+            data-confirm-message="이 직원의 OTP를 초기화할까요? 핸드폰 분실·교체 시 사용합니다. 대상자는 다음 로그인에서 2차 인증을 다시 등록합니다."
+            data-confirm-ok="OTP 초기화">
+        <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+        <span class="muted" style="font-size:11px;flex:1;">핸드폰 교체·분실 시 OTP를 초기화하면 대상자가 다음 로그인에서 2차 인증을 새로 등록합니다.</span>
+        <button class="btn" type="submit">OTP 초기화</button>
+      </form>
+    </div>
+    <!-- [UX29] 직원 삭제는 모달 밖(페이지 하단 위험 구역)으로 이동 -->
+  </div>
+</div>
+
+<script th:src="@{/js/worksystem-settings-modal.js}"></script>
+<script th:if="${openEdit}">
+document.addEventListener('DOMContentLoaded', function () {
+  var m = document.getElementById('modalEmpEdit');
+  if (m) m.hidden = false;
+});
+</script>
+</body>
+</html>

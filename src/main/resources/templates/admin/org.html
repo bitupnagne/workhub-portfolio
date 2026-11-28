@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title th:text="${title}">조직 관리</title>
+  <link rel="icon" type="image/svg+xml" th:href="@{/img/AppLogoMini.svg}">
+  <link rel="stylesheet" th:href="@{/css/worksystem.css}">
+  <!-- 페이지 이동 화면 전환 오류 정리 — 첫 화면 그리기 전에 실행돼야 해서 head 에 둔다 -->
+  <script th:src="@{/js/worksystem-view-transition.js}"></script>
+</head>
+<body>
+<div class="app">
+  <div th:replace="~{fragments/app :: sidebar}"></div>
+  <main>
+    <div th:replace="~{fragments/app :: topbar}"></div>
+    <div class="content admin-page" data-ws-query-contract="admin-org-v1" data-ws-query-path="self" data-ws-query-params="q type page" data-ws-query-context="default">
+      <div class="banner ok" th:if="${message}" th:text="${message}"></div>
+      <div class="banner err" th:if="${error}" th:text="${error}"></div>
+
+      <div class="admin-title-row">
+        <div>
+          <h2>조직 관리</h2>
+        </div>
+        <a class="btn primary" th:href="@{/admin/org/new}" data-app-form data-app-form-label="조직 추가"><svg th:replace="~{fragments/icons :: i('add')}"></svg> 조직 추가</a>
+      </div>
+
+      <section class="section-block org-chart-section">
+        <div class="section-header no-caret">
+          <div class="section-left">
+            <span class="sdot sdot-done"></span>
+            <span class="sname">조직도</span>
+            <span class="scnt scnt-done" th:text="${organizationTotalCount}">0</span>
+          </div>
+        </div>
+        <div class="org-chart">
+          <div class="org-root-wrap" th:each="root : ${organizationTree}">
+            <div class="org-chart-card root">
+              <span class="org-type">대표</span>
+              <strong th:text="${root.team.name}">대표이사</strong>
+              <em th:classappend="${root.team.leaderName == null} ? ' unassigned'" th:text="${root.team.leaderName != null ? root.team.leaderName : '미지정'}">조직장</em>
+            </div>
+            <div class="org-branches" th:if="${!#lists.isEmpty(root.children)}">
+              <div class="org-branch" th:each="division : ${root.children}">
+                <div class="org-chart-card" th:classappend="${division.team.nodeType == 'DIVISION'} ? ' division' : ' team'">
+                  <span class="org-type" th:text="${division.team.nodeType == 'DIVISION' ? '본부' : '팀'}">본부</span>
+                  <strong th:text="${division.team.name}">본부명</strong>
+                  <em th:classappend="${division.team.leaderName == null} ? ' unassigned'" th:text="${division.team.leaderName != null ? division.team.leaderName : '미지정'}">조직장</em>
+                </div>
+                <div class="org-team-grid" th:if="${!#lists.isEmpty(division.children)}">
+                  <div class="org-team-node" th:each="teamNode : ${division.children}">
+                    <div class="org-chart-card team">
+                      <span class="org-type" th:text="${teamNode.team.nodeType == 'DIVISION' ? '본부' : '팀'}">팀</span>
+                      <strong th:text="${teamNode.team.name}">팀명</strong>
+                      <em th:classappend="${teamNode.team.leaderName == null} ? ' unassigned'" th:text="${teamNode.team.leaderName != null ? teamNode.team.leaderName : '미지정'}">조직장</em>
+                    </div>
+                    <div class="org-subteam-list" th:if="${!#lists.isEmpty(teamNode.children)}">
+                      <div class="org-subteam" th:each="child : ${teamNode.children}">
+                        <b th:text="${child.team.name}">하위 조직</b>
+                        <span th:classappend="${child.team.leaderName == null} ? ' unassigned'" th:text="${child.team.leaderName != null ? child.team.leaderName : '미지정'}">조직장</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section-block">
+        <div class="section-header no-caret">
+          <div class="section-left"><span class="sdot sdot-done"></span><span class="sname">조직 검색</span></div>
+        </div>
+        <form class="admin-filter-bar" th:action="@{/admin/org}" method="get" data-ws-query-filter="filter-0">
+          <input class="admin-search-input" name="q" th:value="${query}" placeholder="조직명, 코드, 경로, 조직장 검색">
+          <select name="type" aria-label="조직 유형">
+            <option value="all" th:selected="${typeFilter == 'all'}">전체 유형</option>
+            <option value="ROOT" th:selected="${typeFilter == 'ROOT'}">대표</option>
+            <option value="DIVISION" th:selected="${typeFilter == 'DIVISION'}">본부</option>
+            <option value="TEAM" th:selected="${typeFilter == 'TEAM'}">팀</option>
+          </select>
+          <a class="btn" th:href="@{/admin/org}" data-ws-query-reset="">초기화</a>
+        </form>
+      </section>
+
+      <section class="section-block" data-ws-query-region="results">
+        <div class="section-header no-caret">
+          <div class="section-left"><span class="sdot sdot-new"></span><span class="sname">조직 목록</span><span class="scnt scnt-new" th:text="${#lists.size(organizationNodes)}">0</span></div>
+        </div>
+        <div class="table-scroll">
+          <table class="rt admin-data-table">
+            <thead><tr><th>#</th><th>조직 이름</th><th>유형</th><th>코드</th><th>경로</th><th>조직장</th><th>관리</th></tr></thead>
+            <tbody>
+            <tr class="empty-tr" th:if="${#lists.isEmpty(organizationNodes)}"><td colspan="7">조직이 없습니다.</td></tr>
+            <tr class="mr" th:each="node, stat : ${organizationNodes}">
+              <td th:text="${stat.count}">1</td>
+              <td th:text="${node.name}">조직</td>
+              <td th:text="${node.nodeType == 'ROOT' ? '대표' : (node.nodeType == 'DIVISION' ? '본부' : '팀')}">팀</td>
+              <td><span class="org-tree-code" th:text="${node.code}">CODE</span></td>
+              <td><span class="muted" th:text="${node.path}">경로</span></td>
+              <td><span class="leader-chip" th:classappend="${node.leaderName == null} ? ' unassigned'" th:text="${node.leaderName != null ? node.leaderName : '미지정'}">미지정</span></td>
+              <td><a class="rbtn acc" th:href="@{/admin/org/{id}/edit(id=${node.id})}">수정</a></td>
+            </tr>
+            </tbody>
+          </table>
+        </div>
+        <div th:replace="~{fragments/app :: pagination(${pageInfo}, ${pageBaseUrl})}"></div>
+      </section>
+    </div>
+  </main>
+</div>
+</body>
+</html>

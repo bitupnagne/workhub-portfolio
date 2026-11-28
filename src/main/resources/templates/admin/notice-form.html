@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title th:text="${title}">공지 작성</title>
+  <link rel="icon" type="image/svg+xml" th:href="@{/img/AppLogoMini.svg}">
+  <link rel="stylesheet" th:href="@{/vendor/toastui/toastui-editor.min.css}">
+  <link rel="stylesheet" th:href="@{/css/worksystem.css}">
+  <!-- 페이지 이동 화면 전환 오류 정리 — 첫 화면 그리기 전에 실행돼야 해서 head 에 둔다 -->
+  <script th:src="@{/js/worksystem-view-transition.js}"></script>
+</head>
+<body>
+<div class="app">
+  <div th:replace="~{fragments/app :: sidebar}"></div>
+  <main>
+    <div th:replace="~{fragments/app :: topbar}"></div>
+    <div class="content admin-page">
+      <div class="banner err" th:if="${error}" th:text="${error}"></div>
+      <div class="admin-title-row">
+        <div>
+          <h2 th:text="${notice != null and notice.id != null ? '공지 수정' : '공지 작성'}">공지 작성</h2>
+        </div>
+        <a class="btn" th:href="@{/admin/notices}">목록으로</a>
+      </div>
+
+      <form id="noticeEditForm" th:data-edit-form="${notice != null and notice.id != null ? 'true' : null}" data-edit-title="공지 정보" class="admin-form-panel" th:action="${notice != null and notice.id != null} ? @{/admin/notices/update} : @{/admin/notices}" method="post">
+        <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+        <input type="hidden" name="id" th:if="${notice != null}" th:value="${notice.id}">
+        <div class="form-section-title">공지 정보</div>
+        <div class="admin-form-grid">
+          <div class="field span-2"><label for="title">제목</label><input id="title" name="title" th:value="${noticeForm != null ? noticeForm.title : (notice == null ? '' : notice.title)}" required></div>
+          <div class="field span-2">
+            <label for="bodyEditor">내용</label>
+            <div class="notice-editor" data-notice-editor
+                 th:data-image-upload="@{/admin/notices/image}"
+                 th:data-csrf-header="${_csrf.headerName}" th:data-csrf-token="${_csrf.token}">
+              <div id="bodyEditor" data-editor-surface></div>
+              <textarea id="body" class="notice-editor-source" name="body" hidden th:text="${noticeForm != null ? noticeForm.body : (notice == null ? '' : notice.body)}"></textarea>
+              <div class="notice-editor-status" data-editor-status hidden></div>
+            </div>
+          </div>
+          <label class="check-label switch-label span-2">
+            <input type="checkbox" name="sendNotification" value="true" th:checked="${noticeForm != null and noticeForm.sendNotification}">
+            <span class="switch-ui" aria-hidden="true"></span><span class="switch-text">저장하면서 전 직원에게 알림 발송</span>
+          </label>
+          <label class="check-label switch-label span-2">
+            <input type="checkbox" name="allowAnonymous" value="true"
+                   th:checked="${noticeForm != null ? noticeForm.allowAnonymous : (notice != null and notice.allowAnonymous)}">
+            <span class="switch-ui" aria-hidden="true"></span><span class="switch-text">익명 댓글 허용</span>
+          </label>
+        </div>
+
+        <div class="form-section-title">투표</div>
+        <div class="admin-form-grid">
+          <label class="check-label switch-label span-2">
+            <input type="checkbox" id="pollEnabled" name="pollEnabled" value="true" data-poll-toggle
+                   th:checked="${noticeForm != null ? noticeForm.pollEnabled : pollEdit != null}"
+                   th:disabled="${pollEdit != null and pollEdit.locked}">
+            <input type="hidden" name="pollEnabled" value="true" th:if="${pollEdit != null and pollEdit.locked}">
+            <span class="switch-ui" aria-hidden="true"></span><span class="switch-text">투표 기능 사용</span>
+          </label>
+        </div>
+
+        <div class="poll-stat" th:if="${pollEdit != null}">
+          참여 <b th:text="${pollEdit.participantCount}">0</b>명 ·
+          미참여 <b th:text="${pollEdit.nonParticipantCount}">0</b>명
+          (전체 <span th:text="${pollEdit.totalEligible}">0</span>명)
+          <span th:if="${pollEdit.locked}" class="poll-lock-tag">이미 투표 진행 — 수정 불가</span>
+        </div>
+
+        <div data-poll-box th:classappend="${(noticeForm == null or !noticeForm.pollEnabled) and pollEdit == null} ? ' is-hidden'">
+          <div th:if="${pollEdit != null and pollEdit.locked}" class="poll-readonly admin-form-grid">
+            <div class="field span-2"><label>투표 제목</label>
+              <div class="readonly-field" th:text="${pollEdit.title}">제목</div></div>
+            <div class="field span-2"><label>기간</label>
+              <div class="readonly-field" th:text="|${#temporals.format(pollEdit.startDate,'yyyy-MM-dd HH:mm')} ~ ${#temporals.format(pollEdit.endDate,'yyyy-MM-dd HH:mm')}|">기간</div></div>
+            <div class="field span-2"><label>항목</label>
+              <ul class="poll-ro-list"><li th:each="o : ${pollEdit.options}" th:text="${o.optionText}">항목</li></ul></div>
+            <p class="muted span-2">한 명 이상 투표하여 수정할 수 없습니다. 표수·항목별 결과는 종료 일시 이후에만 공개됩니다.</p>
+          </div>
+          <div th:unless="${pollEdit != null and pollEdit.locked}" class="admin-form-grid">
+            <div class="field span-2"><label for="pollTitle">투표 제목</label>
+              <input id="pollTitle" name="pollTitle" maxlength="200" placeholder="투표 제목을 입력하세요"
+                     th:value="${noticeForm != null ? noticeForm.pollTitle : (pollEdit != null ? pollEdit.title : '')}"></div>
+            <label class="check-label switch-label span-2">
+              <input type="hidden" name="_pollIncludeContractors" value="on">
+              <input type="checkbox" name="pollIncludeContractors" value="true"
+                     th:checked="${noticeForm != null ? noticeForm.pollIncludeContractors : (pollEdit == null or pollEdit.includeContractors)}">
+              <span class="switch-ui" aria-hidden="true"></span><span class="switch-text">도급 직원도 투표 대상에 포함</span>
+            </label>
+            <div class="field"><label>시작 일시</label>
+              <span class="dtcombo" data-dtcombo>
+                <input type="hidden" name="pollStartDate" data-dtcombo-value
+                       th:value="${noticeForm != null and noticeForm.pollStartDate != null ? #temporals.format(noticeForm.pollStartDate,'yyyy-MM-dd''T''HH:mm') : (pollEdit != null ? #temporals.format(pollEdit.startDate,'yyyy-MM-dd''T''HH:mm') : '')}">
+                <input type="date" data-dtcombo-date class="dtcombo-date">
+                <input type="time" data-dtcombo-time class="dtcombo-time">
+              </span></div>
+            <div class="field"><label>종료 일시</label>
+              <span class="dtcombo" data-dtcombo>
+                <input type="hidden" name="pollEndDate" data-dtcombo-value
+                       th:value="${noticeForm != null and noticeForm.pollEndDate != null ? #temporals.format(noticeForm.pollEndDate,'yyyy-MM-dd''T''HH:mm') : (pollEdit != null ? #temporals.format(pollEdit.endDate,'yyyy-MM-dd''T''HH:mm') : '')}">
+                <input type="date" data-dtcombo-date class="dtcombo-date">
+                <input type="time" data-dtcombo-time class="dtcombo-time">
+              </span></div>
+            <div class="field span-2"><label>투표 항목</label>
+              <div class="poll-opt-list" data-poll-opts>
+                <th:block th:if="${noticeForm != null and noticeForm.pollOptions != null and !#lists.isEmpty(noticeForm.pollOptions)}">
+                  <div class="poll-opt" th:each="o : ${noticeForm.pollOptions}">
+                    <input name="pollOptions" maxlength="200" th:value="${o}"><button type="button" class="rbtn del" data-poll-del>−</button></div>
+                </th:block>
+                <th:block th:if="${noticeForm == null and pollEdit != null and !#lists.isEmpty(pollEdit.options)}">
+                  <div class="poll-opt" th:each="o : ${pollEdit.options}">
+                    <input name="pollOptions" maxlength="200" th:value="${o.optionText}"><button type="button" class="rbtn del" data-poll-del>−</button></div>
+                </th:block>
+                <th:block th:unless="${(noticeForm != null and noticeForm.pollOptions != null and !#lists.isEmpty(noticeForm.pollOptions)) or (noticeForm == null and pollEdit != null and !#lists.isEmpty(pollEdit.options))}">
+                  <div class="poll-opt"><input name="pollOptions" maxlength="200" placeholder="항목 1"><button type="button" class="rbtn del" data-poll-del>−</button></div>
+                  <div class="poll-opt"><input name="pollOptions" maxlength="200" placeholder="항목 2"><button type="button" class="rbtn del" data-poll-del>−</button></div>
+                </th:block>
+              </div>
+              <button type="button" class="btn" data-poll-add style="margin-top:8px">+ 항목 추가</button>
+              <p class="muted">투표는 익명입니다. 종료 일시 이후에만 결과(표수·항목별)가 공개되고, 그 전에는 참여/미참여 인원만 보입니다.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-actions">
+          <span class="muted">수정 시 알림 발송을 선택하면 기존 공지 알림을 갱신합니다.</span>
+          <div>
+            <a class="btn" th:href="@{/admin/notices}">취소</a>
+            <button class="btn primary" type="submit">저장</button>
+          </div>
+        </div>
+      </form>
+      <form hidden data-edit-delete-owner="noticeEditForm" class="form-actions" th:if="${notice != null and notice.id != null and notice.active}" th:action="@{/admin/notices/{id}/delete(id=${notice.id})}" method="post"
+                        data-confirm-message="이 공지를 삭제하시겠습니까?"
+                        data-confirm-ok="삭제" data-confirm-danger="true">
+                    <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                    <button class="rbtn del" type="submit">삭제</button>
+                  </form>
+
+    </div>
+  </main>
+</div>
+<script th:src="@{/vendor/toastui/toastui-editor-all.min.js}"></script>
+<script th:src="@{/js/worksystem-notice-editor.js}"></script>
+<script th:src="@{/js/worksystem-datetime.js}"></script>
+</body>
+</html>

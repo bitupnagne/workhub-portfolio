@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title th:text="${title}">관리자 지정</title>
+  <link rel="icon" type="image/svg+xml" th:href="@{/img/AppLogoMini.svg}">
+  <link rel="stylesheet" th:href="@{/css/worksystem.css}">
+  <!-- 페이지 이동 화면 전환 오류 정리 — 첫 화면 그리기 전에 실행돼야 해서 head 에 둔다 -->
+  <script th:src="@{/js/worksystem-view-transition.js}"></script>
+</head>
+<body>
+<div class="app">
+  <div th:replace="~{fragments/app :: sidebar}"></div>
+  <main>
+    <div th:replace="~{fragments/app :: topbar}"></div>
+    <div class="content admin-page" data-ws-query-contract="admin-settings-v1" data-ws-query-path="self" data-ws-query-params="q teamId role page" data-ws-query-context="default">
+      <div class="banner ok" th:if="${message}" th:text="${message}"></div>
+      <div class="banner err" th:if="${error}" th:text="${error}"></div>
+
+      <div class="admin-title-row">
+        <div>
+          <h2>관리자 지정</h2>
+        </div>
+      </div>
+
+      <section class="section-block">
+        <div class="section-header no-caret">
+          <div class="section-left"><span class="sdot sdot-new"></span><span class="sname">권한 검색</span></div>
+        </div>
+        <form class="admin-filter-bar" th:action="@{/admin/settings}" method="get" data-ws-query-filter="filter-0">
+          <input class="admin-search-input" name="q" th:value="${query}" placeholder="이름, ID, 팀, 직무 검색">
+          <select name="teamId" aria-label="팀 필터">
+            <option value="">전체 팀</option>
+            <option th:each="team : ${teams}" th:value="${team.id}" th:selected="${teamFilter != null and team.id == teamFilter}" th:text="${team.name}">팀</option>
+          </select>
+          <select name="role" aria-label="권한 필터">
+            <option value="all" th:selected="${roleFilter == 'all'}">전체 권한</option>
+            <option th:each="rc : ${manageableRoles}" th:value="${rc}" th:selected="${roleFilter == rc}" th:text="${T(com.portfolio.worksystem.util.RoleLabels).label(rc)}">권한</option>
+          </select>
+        </form>
+      </section>
+
+      <section class="section-block" id="rolesSection" data-ws-query-region="results">
+        <div class="section-header no-caret">
+          <div class="section-left"><span class="sdot sdot-done"></span><span class="sname">직원 권한</span><span class="scnt scnt-done" th:text="${#lists.size(managedUsers)}">0</span></div>
+        </div>
+        <div class="table-scroll m-desktop-only">
+          <table class="rt admin-data-table">
+            <thead>
+            <tr>
+              <th>#</th><th>이름</th><th>팀</th>
+              <th th:each="rc : ${manageableRoles}" th:text="${T(com.portfolio.worksystem.util.RoleLabels).label(rc)}">권한</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr class="empty-tr" th:if="${#lists.isEmpty(managedUsers)}"><td colspan="9">직원이 없습니다.</td></tr>
+            <tr class="mr" th:each="u, stat : ${managedUsers}">
+              <td th:text="${stat.count}">1</td>
+              <td th:text="${u.name}">이름</td>
+              <td><span class="muted" th:text="${u.teamName ?: '-'}">팀</span></td>
+              <td th:each="rc : ${manageableRoles}"
+                  th:with="superOn=${#lists.contains(u.roles,'SUPER_ADMIN')},
+                           effective=${#lists.contains(u.roles, rc) or (#lists.contains(u.roles,'SUPER_ADMIN') and rc != 'SUPER_ADMIN')},
+                           confMsg=${#lists.contains(u.roles,'SUPER_ADMIN')
+                                       ? (rc == 'SUPER_ADMIN' ? '슈퍼 관리자 권한을 해제하시겠습니까?' : '이 권한을 해제하면 슈퍼관리자 권한이 함께 해제됩니다. 해제하시겠습니까?')
+                                       : (rc == 'SUPER_ADMIN' ? '슈퍼 관리자로 지정하면 모든 관리자 권한이 부여됩니다. 지정하시겠습니까?' : null)}">
+                <form th:action="@{/admin/settings/role}" method="post" style="margin:0" data-partial-toggle
+                      th:attr="data-cascade=${superOn or rc == 'SUPER_ADMIN'} ? '' : null,
+                               data-confirm-message=${confMsg},
+                               data-confirm-ok=${confMsg != null} ? (effective ? '해제' : '지정') : null,
+                               data-confirm-danger=${confMsg != null and effective} ? 'true' : null">
+                  <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                  <input type="hidden" name="userId" th:value="${u.id}">
+                  <input type="hidden" name="roleCode" th:value="${rc}">
+                  <input type="hidden" name="grant" th:value="${!effective}">
+                  <button th:if="${effective}" class="rbtn del" type="submit">해제</button>
+                  <button th:unless="${effective}" class="rbtn acc" type="submit">지정</button>
+                </form>
+              </td>
+            </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- 모바일: 직원별 권한 아코디언(요약 = 이름·팀·권한요약, 펼치면 역할별 지정/해제) -->
+        <div class="m-emp-list">
+          <p class="m-emp-empty" th:if="${#lists.isEmpty(managedUsers)}">직원이 없습니다.</p>
+          <details class="m-emp-acc" th:each="u : ${managedUsers}">
+            <summary>
+              <span class="m-emp-id">
+                <b th:text="${u.name}">이름</b>
+                <em th:text="${u.teamName ?: '-'}">팀</em>
+              </span>
+              <span class="m-emp-quick">
+                <span class="role-chip m-role-sum" th:text="${#lists.isEmpty(u.roles) ? '권한 없음' : T(com.portfolio.worksystem.util.RoleLabels).labels(u.roles)}">권한</span>
+              </span>
+            </summary>
+            <div class="m-emp-detail m-perm-detail">
+              <div class="m-perm-row" th:each="rc : ${manageableRoles}">
+                <span th:text="${T(com.portfolio.worksystem.util.RoleLabels).label(rc)}">권한</span>
+                <form th:action="@{/admin/settings/role}" method="post" style="margin:0" data-partial-toggle>
+                  <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                  <input type="hidden" name="userId" th:value="${u.id}">
+                  <input type="hidden" name="roleCode" th:value="${rc}">
+                  <input type="hidden" name="grant" th:value="${!#lists.contains(u.roles, rc)}">
+                  <button th:if="${#lists.contains(u.roles, rc)}" class="rbtn del" type="submit">해제</button>
+                  <button th:unless="${#lists.contains(u.roles, rc)}" class="rbtn acc" type="submit">지정</button>
+                </form>
+              </div>
+            </div>
+          </details>
+        </div>
+
+        <div th:replace="~{fragments/app :: pagination(${pageInfo}, ${pageBaseUrl})}"></div>
+      </section>
+    </div>
+  </main>
+</div>
+</body>
+</html>

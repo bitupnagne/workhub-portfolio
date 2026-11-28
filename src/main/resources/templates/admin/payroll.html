@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title th:text="${title}">급여 관리</title>
+  <link rel="icon" type="image/svg+xml" th:href="@{/img/AppLogoMini.svg}">
+  <link rel="stylesheet" th:href="@{/css/worksystem.css}">
+  <!-- 페이지 이동 화면 전환 오류 정리 — 첫 화면 그리기 전에 실행돼야 해서 head 에 둔다 -->
+  <script th:src="@{/js/worksystem-view-transition.js}"></script>
+</head>
+<body>
+<div class="app">
+  <div th:replace="~{fragments/app :: sidebar}"></div>
+  <main>
+    <div th:replace="~{fragments/app :: topbar}"></div>
+    <div class="content admin-page" data-ws-query-contract="admin-payroll-v1" data-ws-query-path="self" data-ws-query-params="date" data-ws-query-context="default">
+      <div class="banner ok" th:if="${message}" th:text="${message}"></div>
+      <div class="banner err" th:if="${error}" th:text="${error}"></div>
+
+      <div class="admin-title-row">
+        <div><h2>급여 관리</h2></div>
+      </div>
+
+      <div data-ws-query-state="missing">
+        <div class="banner err" th:if="${missingCount > 0}"
+             th:text="|통상시급이 정해지지 않은 직급이 ${missingCount}개 있습니다(재직 ${missingPeople}명). 이 직원들의 시간외 수당·연차수당은 '미설정'으로 나옵니다.|">
+          미설정 안내
+        </div>
+      </div>
+
+      <section class="section-block">
+        <div class="section-header no-caret">
+          <div class="section-left">
+            <span class="sdot sdot-new"></span>
+            <span class="sname">직급별 통상시급</span>
+            <span class="scnt scnt-new" th:text="${#lists.size(rows)}">0</span>
+          </div>
+          <form class="section-actions payroll-date" th:action="@{/admin/payroll}" method="get" data-ws-query-filter>
+            <label class="muted" for="payrollDate">기준일</label>
+            <input id="payrollDate" type="date" name="date" th:value="${baseDate}">
+            <a class="rbtn" th:if="${baseDate != today}" th:href="@{/admin/payroll}">오늘</a>
+          </form>
+        </div>
+        <div data-ws-query-region="payroll-rows">
+        <div class="table-scroll">
+          <table class="rt admin-data-table no-mcard">
+            <thead>
+            <tr>
+              <th>직급</th>
+              <th style="width:110px">인원</th>
+              <th style="width:130px">통상시급</th>
+              <th style="width:130px">연차수당 1일</th>
+              <th>적용</th>
+              <th>다음 변경</th>
+              <th style="width:80px">관리</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr class="empty-tr" th:if="${#lists.isEmpty(rows)}"><td colspan="7">직급이 없습니다. 직급 관리에서 먼저 만드세요.</td></tr>
+            <tr th:each="row : ${rows}" th:classappend="${!row.grade.active} ? 'is-muted' : ''">
+              <td><span th:if="${row.grade.depth > 0}" class="muted" th:text="${#strings.repeat('　', row.grade.depth) + '└ '}">└ </span><b th:text="${row.grade.name}">3급</b>
+                <small class="muted" th:if="${!row.grade.active}"> (미사용)</small></td>
+              <td><span th:text="|${row.grade.userCount}명|">0명</span><small class="muted" th:if="${row.grade.hasChildren}" th:text="| (하위 포함 ${row.grade.descendantUserCount})|"></small></td>
+              <td>
+                <b th:if="${row.current != null}" th:text="|${#numbers.formatInteger(row.current.hourlyWage, 1, 'COMMA')}원|">15,000원</b>
+                <span th:if="${row.current == null}" class="err-text">미설정</span>
+              </td>
+              <td th:text="${row.current == null} ? '-' : |${#numbers.formatInteger(row.current.hourlyWage * dailyHours, 1, 'COMMA')}원|">120,000원</td>
+              <td class="muted">
+                <span th:if="${row.current != null and !row.current.inherited}" th:text="|${row.current.effectiveFrom}부터 · 직접|">2026-01-01부터 · 직접</span>
+                <span th:if="${row.current != null and row.current.inherited}" th:text="|상위 '${row.current.sourceGradeName}' 값 (${row.current.effectiveFrom}부터)|">상위 값</span>
+              </td>
+              <td class="muted" th:text="${row.next == null} ? '-' : |${row.next.effectiveFrom}부터 ${#numbers.formatInteger(row.next.hourlyWage, 1, 'COMMA')}원|">-</td>
+              <td><button class="rbtn acc" type="button" th:data-modal-open="|#wage-${row.grade.id}|">변경</button></td>
+            </tr>
+            </tbody>
+          </table>
+        </div>
+        </div>
+      </section>
+
+<th:block th:each="row : ${rows}">
+  <div class="schedule-edit-modal" data-settings-modal data-modal-size="compact" th:id="|wage-${row.grade.id}|" hidden>
+    <div class="schedule-edit-dialog compact" role="dialog" aria-modal="true" th:aria-labelledby="|wageTitle-${row.grade.id}|">
+      <div class="schedule-edit-head"><strong th:id="|wageTitle-${row.grade.id}|" th:text="|통상시급 · ${row.grade.pathName}|">통상시급</strong><button type="button" data-modal-close aria-label="닫기"><svg th:replace="~{fragments/icons :: i('close')}"></svg></button></div>
+      <form th:action="@{/admin/payroll/wage}" method="post">
+        <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+        <input type="hidden" name="gradeId" th:value="${row.grade.id}">
+        <div class="schedule-edit-body">
+          <p class="muted" th:if="${row.current != null}" th:text="|지금 적용 중: ${#numbers.formatInteger(row.current.hourlyWage, 1, 'COMMA')}원${row.current.inherited ? ' (상위 ' + row.current.sourceGradeName + ' 값)' : ''}|">지금 적용 중</p>
+          <p class="err-text" th:if="${row.current == null}">아직 정해지지 않았습니다.</p>
+          <label class="field">적용 시작일<input type="date" name="effectiveFrom" th:value="${today}" required></label>
+          <label class="field">통상시급 (원)<input type="text" inputmode="numeric" name="hourlyWage" required placeholder="예: 15000"></label>
+          <label class="field">메모<input type="text" name="note" maxlength="200" placeholder="예: 2027년 임금 인상"></label>
+        </div>
+        <div class="schedule-edit-foot"><button class="btn primary" type="submit">저장</button><button class="rbtn" type="button" data-modal-close>닫기</button></div>
+      </form>
+      <div class="payroll-history" th:if="${!#lists.isEmpty(row.history)}">
+        <div class="perm-sub">이 직급에 직접 넣은 내역</div>
+        <table class="rt">
+          <thead><tr><th>시작일</th><th>통상시급</th><th>메모</th><th></th></tr></thead>
+          <tbody>
+          <tr th:each="w : ${row.history}">
+            <td th:text="${w.effectiveFrom}">2026-01-01</td>
+            <td th:text="|${#numbers.formatInteger(w.hourlyWage, 1, 'COMMA')}원|">15,000원</td>
+            <td class="muted" th:text="${w.note ?: '-'}">-</td>
+            <td>
+              <form th:action="@{/admin/payroll/wage/{id}/delete(id=${w.id})}" method="post"
+                    th:data-confirm-message="|${w.effectiveFrom} 시급 내역을 지우시겠습니까? 그 기간 계산이 앞 내역 또는 상위 직급 값으로 바뀝니다.|"
+                    data-confirm-ok="지우기" data-confirm-danger="true">
+                <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                <button class="rbtn del" type="submit">지우기</button>
+              </form>
+            </td>
+          </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</th:block>
+    </div>
+  </main>
+</div>
+<script th:src="@{/js/worksystem-settings-modal.js}"></script>
+</body>
+</html>

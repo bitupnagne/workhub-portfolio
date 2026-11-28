@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>인사발령</title>
+  <link rel="icon" type="image/svg+xml" th:href="@{/img/AppLogoMini.svg}">
+  <link rel="stylesheet" th:href="@{/css/worksystem.css}">
+  <!-- 페이지 이동 화면 전환 오류 정리 — 첫 화면 그리기 전에 실행돼야 해서 head 에 둔다 -->
+  <script th:src="@{/js/worksystem-view-transition.js}"></script>
+</head>
+<body>
+<div class="app">
+  <div th:replace="~{fragments/app :: sidebar}"></div>
+  <main>
+    <div th:replace="~{fragments/app :: topbar}"></div>
+    <div class="content admin-page" data-ws-query-contract="admin-personnel-transfer-v1" data-ws-query-path="self" data-ws-query-params="year page" data-ws-query-context="default">
+      <div class="banner ok" th:if="${message}" th:text="${message}"></div>
+      <div class="banner err" th:if="${error}" th:text="${error}"></div>
+
+      <div class="admin-title-row">
+        <div>
+          <h2>인사발령</h2>
+          <p>발령일이 미래면 그날 자동 반영됩니다.</p>
+        </div>
+        <button class="btn primary" type="button" data-pt-register-open aria-haspopup="dialog" aria-controls="ptRegisterBg">인사발령</button>
+      </div>
+
+      <div class="schedule-edit-modal" id="ptRegisterBg" hidden>
+        <div class="schedule-edit-dialog pt-registration-dialog" role="dialog" aria-modal="true" aria-labelledby="ptRegisterTitle">
+          <div class="schedule-edit-head">
+            <strong id="ptRegisterTitle">인사발령 등록</strong>
+            <button type="button" data-pt-register-close aria-label="인사발령 창 닫기"><svg th:replace="~{fragments/icons :: i('close')}"></svg></button>
+          </div>
+          <form class="pt-registration-form" id="transferForm" th:action="@{/admin/personnel/transfer}" method="post"
+                data-require-fields="userId,toTeamId,effectiveDate" data-require-message="직원·대상 팀·발령일을 모두 선택하세요.">
+            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+            <div class="pt-registration-body">
+              <p class="muted pt-registration-help">직원과 대상 팀을 선택하세요. 오늘 또는 과거 발령은 즉시 반영되며, 미래 발령은 해당 날짜에 반영됩니다.</p>
+              <div class="banner err" id="ptRegisterError" role="alert" hidden></div>
+              <div class="pt-registration-grid">
+                <div class="field">
+                  <label for="ptUser">직원</label>
+                  <select name="userId" id="ptUser" required>
+                    <option value="" data-team="">직원 선택</option>
+                    <option th:each="m : ${members}" th:value="${m.id}"
+                            th:attr="data-team=${m.teamName == null ? '미지정' : m.teamName}, data-name=${m.name}"
+                            th:text="${m.name + (m.teamName != null ? ' (' + m.teamName + ')' : '')}">이름</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label id="ptCurrentTeamLabel">현재 부서</label>
+                  <div class="readonly-field" id="ptCurrentTeam" aria-labelledby="ptCurrentTeamLabel" role="status">직원을 선택하세요.</div>
+                </div>
+                <div class="field">
+                  <label for="ptToTeam">대상 팀</label>
+                  <select name="toTeamId" id="ptToTeam" required>
+                    <option value="">대상 팀 선택</option>
+                    <option th:each="t : ${teams}" th:value="${t.id}" th:text="${t.name}">팀</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="ptDate">발령일</label>
+                  <input type="date" name="effectiveDate" id="ptDate" required>
+                </div>
+              </div>
+            </div>
+            <div class="schedule-edit-foot pt-registration-foot">
+              <button class="btn" type="button" data-pt-register-close>취소</button>
+              <button class="btn primary" type="submit">등록</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- 이력 -->
+      <section class="form-panel" id="ptHistory">
+        <form class="admin-filter-bar pt-history-filter" method="get" th:action="@{/admin/personnel/transfer}" data-ws-query-filter="filter-0">
+          <div class="field">
+          <label for="ptHistoryYear">조회 연도</label>
+          <select id="ptHistoryYear" name="year">
+            <option th:each="y : ${years}" th:value="${y}" th:selected="${y == selectedYear}" th:text="${y + '년'}">연도</option>
+          </select>
+          </div>
+        </form><div data-ws-query-region="history-results">
+
+        <div class="form-section-title" th:text="${selectedYear + '년 인사발령 이력 (' + #lists.size(history) + '건)'}">이력</div>
+        <div class="table-scroll" style="margin-top:8px">
+          <table class="rt admin-data-table no-mcard">
+            <thead><tr><th>조직원</th><th>현재→대상</th><th>발령일</th><th>상태</th><th>등록자</th><th>관리</th></tr></thead>
+            <tbody>
+            <tr class="empty-tr" th:if="${#lists.isEmpty(history)}"><td colspan="6">해당 연도 인사발령 이력이 없습니다.</td></tr>
+            <tr class="mr" th:each="h : ${history}">
+              <td th:text="${h.userName}">이름</td>
+              <td th:text="${(h.fromTeamName == null ? '미지정' : h.fromTeamName) + ' → ' + h.toTeamName}">이동</td>
+              <td th:text="${#temporals.format(h.effectiveDate, 'yyyy-MM-dd')}">발령일</td>
+              <td><span class="status-pill" th:classappend="${h.applied} ? ' ok' : ''" th:text="${h.applied ? '반영됨' : '예약'}">상태</span></td>
+              <td th:text="${h.createdByName == null ? '-' : h.createdByName}">등록자</td>
+              <td style="white-space:nowrap;display:flex;gap:6px">
+                <button class="rbtn" type="button" data-edit-link
+                        th:attr="data-pt-editdate=${h.id}, data-pt-date=${#temporals.format(h.effectiveDate,'yyyy-MM-dd')}, data-pt-name=${h.userName}, data-pt-year=${selectedYear}">수정</button>
+              </td>
+            </tr>
+            </tbody>
+          </table>
+        </div>
+      
+</div></section>
+
+      <!-- 날짜수정 모달 -->
+      <div class="pt-modal-bg" id="ptDateBg" style="position:fixed;inset:0;background:rgba(15,18,22,.45);z-index:1700;display:none;align-items:center;justify-content:center">
+        <div class="pt-modal" style="background:var(--surface);border-radius:14px;padding:20px;width:min(420px,92vw)">
+          <h3 style="margin:0 0 10px;font-size:16px">발령일 수정</h3>
+          <form id="ptDateForm" method="post" th:action="@{/admin/personnel/transfer/0/date}" data-pt-ajax>
+            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+            <input type="date" name="effectiveDate" required style="width:100%;padding:9px;border:1px solid var(--border);border-radius:8px">
+            <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px">
+              <button class="btn danger" type="button" id="ptDateDelete" data-pt-delete="" style="margin-right:auto">삭제</button>
+              <button class="btn" type="button" id="ptDateCancel">취소</button>
+              <button class="btn primary" type="submit">저장</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- 삭제 타이핑 확인 모달 -->
+      <div class="pt-modal-bg" id="ptDeleteBg" style="position:fixed;inset:0;background:rgba(15,18,22,.45);z-index:1700;display:none;align-items:center;justify-content:center">
+        <div class="pt-modal" style="background:var(--surface);border-radius:14px;padding:20px;width:min(440px,92vw)">
+          <h3 style="color:#d92d20;margin:0 0 10px;font-size:16px">인사이동 이력 삭제</h3>
+          <p style="margin:0 0 6px"><b id="ptDelName">이름</b> 의 인사이동 이력을 삭제합니다(현재 소속 팀은 유지).</p>
+          <p class="muted" style="margin:0 0 6px">계속하려면 <b>삭제합니다</b> 를 입력하세요.</p>
+          <form id="ptDeleteForm" method="post" th:action="@{/admin/personnel/transfer/0/delete}" data-pt-ajax>
+            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+            <input type="hidden" name="year" id="ptDelYear" th:value="${selectedYear}">
+            <input name="confirmText" autocomplete="off" placeholder="삭제합니다" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:8px">
+            <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px">
+              <button class="btn" type="button" id="ptDeleteCancel">취소</button>
+              <button class="btn danger" type="submit">삭제</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+</body>
+</html>

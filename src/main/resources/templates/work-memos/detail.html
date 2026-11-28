@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title th:text="${title}">자료전송</title>
+  <link rel="icon" type="image/svg+xml" th:href="@{/img/AppLogoMini.svg}">
+  <link rel="stylesheet" th:href="@{/css/worksystem.css}">
+  <!-- 페이지 이동 화면 전환 오류 정리 — 첫 화면 그리기 전에 실행돼야 해서 head 에 둔다 -->
+  <script th:src="@{/js/worksystem-view-transition.js}"></script>
+</head>
+<body>
+<div class="app">
+  <div th:replace="~{fragments/app :: sidebar}"></div>
+  <main>
+    <div th:replace="~{fragments/app :: topbar}"></div>
+    <div class="content admin-page">
+      <div class="banner ok" th:if="${message}" th:text="${message}"></div>
+
+      <div class="action-bar">
+        <a class="btn" th:href="@{/work-memos}"><svg th:replace="~{fragments/icons :: i('arrow_back')}"></svg> 목록</a>
+        <span style="flex:1"></span>
+        <form th:action="@{|/work-memos/${memo.id}/star|}" method="post" style="display:inline">
+          <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+          <button class="btn" type="submit">
+            <span th:if="${memo.starred}" style="color:#F59E0B"><svg th:replace="~{fragments/icons :: i('star')}"></svg> 즐겨찾기 해제</span>
+            <span th:unless="${memo.starred}">즐겨찾기</span>
+          </button>
+        </form>
+      </div>
+
+      <section class="section-block">
+        <div class="section-header no-caret">
+          <div class="section-left">
+            <span class="sdot sdot-new"></span>
+            <span class="sname" th:text="${memo.title}">제목</span>
+          </div>
+        </div>
+
+        <div class="admin-form-panel compact">
+          <div class="admin-form-grid">
+            <div class="field">
+              <label>보낸 사람</label>
+              <input type="text" th:value="${memo.senderName}" readonly>
+            </div>
+            <div class="field">
+              <label>보낸 일시</label>
+              <input type="text" th:value="${#temporals.format(memo.sentAt, 'yyyy.MM.dd HH:mm')}" readonly>
+            </div>
+          </div>
+          <div class="field" style="margin-top:10px">
+            <label>받는 사람</label>
+            <div style="display:flex;flex-wrap:wrap;gap:6px">
+              <span th:each="r : ${recipients}"
+                    style="display:inline-block;padding:3px 10px;border:1px solid #e5e7eb;border-radius:12px;font-size:12px;background:#f8fafc"
+                    th:text="${r.recipientName}">이름</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="admin-form-panel compact">
+          <div class="field">
+            <label>본문</label>
+            <div style="white-space:pre-wrap;line-height:1.7;font-size:13.5px;color:#111827;padding:10px 0;min-height:80px"
+                 th:text="${memo.body}">본문</div>
+          </div>
+        </div>
+
+        <div th:if="${memo.attachments != null and !#lists.isEmpty(memo.attachments)}" class="admin-form-panel compact">
+          <div class="field" style="margin-bottom:0">
+            <label th:text="|첨부파일 ${#lists.size(memo.attachments)}건|">첨부파일</label>
+            <div style="display:flex;flex-direction:column;gap:6px">
+              <div th:each="a : ${memo.attachments}"
+                   style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;min-width:0;padding:8px 12px;border:1px solid #e5e7eb;border-radius:8px;background:#f9fafb">
+                <span aria-hidden="true"><svg class="btn-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg></span>
+                <a th:if="${#strings.equalsIgnoreCase(a.attachmentType, 'IMAGE')}"
+                   style="flex:1 1 180px;min-width:0;overflow-wrap:anywhere;color:var(--brand-dark,#4338CA);font-weight:600;text-decoration:none"
+                   th:href="@{|/api/work-memos/attachments/${a.id}|}"
+                   th:data-file-viewer-url="@{|/api/work-memos/attachments/${a.id}|}"
+                   th:data-file-viewer-name="${a.originalFilename}"
+                   data-file-viewer-type="image" target="_blank" rel="noopener noreferrer"
+                   th:title="|${a.originalFilename} 미리보기|">
+                  <span th:text="${a.originalFilename}">파일명</span>
+                  <span style="font-size:11px;font-weight:400;white-space:nowrap"> · 미리보기</span>
+                </a>
+                <a th:unless="${#strings.equalsIgnoreCase(a.attachmentType, 'IMAGE')}"
+                   style="flex:1 1 180px;min-width:0;overflow-wrap:anywhere;color:var(--brand-dark,#4338CA);font-weight:600;text-decoration:none"
+                   th:href="@{|/api/work-memos/attachments/${a.id}|}"
+                   th:download="${a.originalFilename}"
+                   th:text="${a.originalFilename}">파일명</a>
+                <span class="muted" style="font-size:11px;white-space:nowrap"
+                      th:text="${a.fileSize != null} ? ${#numbers.formatInteger(a.fileSize / 1024, 1, 'COMMA')} + ' KB'">크기</span>
+                <a class="btn" style="flex:0 0 auto;white-space:nowrap"
+                   th:href="@{|/api/work-memos/attachments/${a.id}|}"
+                   th:download="${a.originalFilename}" th:aria-label="|${a.originalFilename} 다운로드|">다운로드</a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+</div>
+</body>
+</html>

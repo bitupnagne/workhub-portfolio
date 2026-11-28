@@ -1,0 +1,211 @@
+:host{--primary:color-mix(in oklch,#4F46E5 78%,white);--primary-dark:#4338CA;--bg:#F3F4FD;--surface:#fff;--border:#DBDBDB;--border-dark:#9aa7b8;--text:#1B1D1F;--muted:#64748b;--danger:#b91c1c;--success:#0f766e;--text-secondary:#475569;--radius-sm:6px}
+
+*, *::before, *::after { box-sizing:border-box;margin:0;padding:0; }
+:host {
+  height: 100%; font-size: 14px; line-height: 1.5;
+  font-family: 'OTP Pretendard', 'Pretendard', -apple-system, BlinkMacSystemFont,
+    'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif;
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+}
+
+a { text-decoration: none; color: inherit; cursor: pointer; }
+button { font-family: inherit; cursor: pointer; }
+input, select, textarea { font-family: inherit; font-size: 13px; }
+
+.btn, .btn-ghost {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 8px 16px; border-radius: var(--radius-sm); border: 1px solid transparent;
+  font-size: 13px; font-weight: 600; cursor: pointer; line-height: 1.2;
+  transition: background .12s ease, border-color .12s ease, color .12s ease;
+  white-space: nowrap; font-family: inherit;
+}
+/* 키보드 이동 시에만 링을 보인다 — 마우스 클릭마다 테두리가 남으면 지저분하다. */
+.btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+
+.btn.sm     { padding: 5px 12px; font-size: 12px; }
+.btn-ghost {
+  background: var(--surface); color: var(--text);
+  border: 1px solid var(--border-dark);
+}
+.btn-ghost:hover:not(:disabled)  { background: var(--bg); border-color: var(--muted); }
+.btn-ghost:active:not(:disabled) { transform: translateY(1px); }
+.otp-desc { font-size: 13px; color: var(--text-secondary); margin: 0 0 8px; }
+.otp-install { font-size: 12px; color: var(--muted); line-height: 1.6; margin: 0 0 10px; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+.otp-install a { color: var(--primary-dark); font-weight: 700; text-decoration: none; }
+.otp-install a:hover { text-decoration: underline; }
+.otp-install a:focus-visible { outline: 2px solid var(--primary-dark); outline-offset: 2px; border-radius: 2px; }
+.otp-install-links { margin-top: 4px; }
+
+/* 서버와의 실측 시차 + 코드 남은 시간. 예전의 2칸 시계(.otp-clock)를 대신한다 —
+   "몇 시인지"보다 "지금 코드가 몇 초 남았는지"가 실제로 필요한 정보다. */
+.otp-sync-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 8px 0 4px; font-size: 12px; color: var(--muted); }
+.otp-sync-left { display: flex; align-items: center; gap: 6px; }.otp-kst-clock{font-variant-numeric:tabular-nums;font-weight:600;color:var(--text)}
+.otp-sync-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--primary-dark); flex: 0 0 auto; }
+.otp-sync-dot.warn { background: var(--danger); }
+.otp-sync-right { font-variant-numeric: tabular-nums; }
+.otp-timer-sec { color: var(--primary-dark); font-size: 15px; }
+.otp-timer-sec.warn { color: var(--danger); }
+.otp-timer-track { height: 3px; border-radius: 2px; background: var(--border); overflow: hidden; margin: 8px 0 14px; }
+.otp-timer-bar { display: block; height: 100%; width: 0; background: var(--primary-dark); transition: width .2s linear; }
+.otp-timer-bar.warn { background: var(--danger); }
+
+.otp-err { display: none; text-align: center; color: var(--danger); font-weight: 700; font-size: 13px; margin-bottom: 8px; }
+.otp-code-wrap { margin-top: 8px; }
+.modal-backdrop {
+  position: fixed; inset: 0; z-index: 500;
+  background: rgba(15, 23, 42, 0.58);
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+.modal-backdrop.open {
+  opacity: 1; pointer-events: auto;
+}
+
+.modal-box {
+  background: var(--surface);
+  border-radius: 14px;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.18);
+  width: 100%; max-width: 420px;
+  margin: 16px;
+  transform: translateY(12px) scale(0.97);
+  transition: transform 0.2s ease;
+  overflow: visible;
+  display: flex; flex-direction: column;
+}
+.modal-backdrop.open .modal-box {
+  transform: translateY(0) scale(1);
+}
+
+.modal-title{font-size:16px;font-weight:700;color:var(--text);letter-spacing:-.3px}
+/* 데모 안내는 인증 UI 밖에 두므로 이식할 때 제외할 수 있습니다. */
+.modal-backdrop{min-height:100%;overflow-y:auto;padding:28px 0}
+.otp-shell{width:100%;max-width:462px;margin:auto}
+.modal-box{width:calc(100% - 32px);max-width:430px;padding:26px;text-align:left}
+.otp-header{text-align:center}.otp-logo{height:30px;width:auto;margin-bottom:12px}
+.otp-header .modal-title{margin:0 0 10px;font-size:20px}
+.otp-actions{margin-top:18px}.otp-actions .btn{width:100%}
+[hidden]{display:none!important}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+@media(max-width:360px){.modal-box{padding:22px 18px}.otp-sync-row{gap:6px;font-size:11px}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;transition-duration:.01ms!important;animation-duration:.01ms!important}.otpx-spin{animation-duration:1.8s!important}}
+
+/* 등록 모달/실행 영역. 원본 otp-setup의 단계·수동 키 구성을 모달로 옮겼습니다. */
+:host{--primary-light:rgba(79,70,229,.1);--bg-secondary:#f8fafc}
+
+.btn-primary{background:var(--primary);color:var(--text);border-color:transparent}
+.btn-primary:hover:not(:disabled){background:var(--primary-dark)}
+.modal-backdrop{overflow-y:auto;padding:24px 0;align-items:flex-start}
+.otp-shell{max-width:462px;margin:auto;width:100%}.otp-shell.setup{max-width:512px}
+.modal-box{position:relative;width:calc(100% - 32px);max-width:430px;margin:0 16px;padding:26px}
+.otp-shell.setup .modal-box{max-width:480px}
+.modal-close{position:absolute;right:14px;top:14px;width:30px;height:30px;border:0;background:transparent;color:var(--muted);border-radius:6px;display:flex;align-items:center;justify-content:center}
+.modal-close:hover{background:var(--bg)}.modal-close:focus-visible{outline:2px solid var(--primary-dark);outline-offset:2px}
+.modal-close svg{width:18px;height:18px}
+.otp-header{padding:0 20px}.otp-actions{display:flex;gap:8px}.otp-actions .btn{min-width:0;flex:1}
+
+
+
+
+
+
+
+.otp-meta{font-size:12px;color:var(--muted);margin-top:6px;line-height:1.6}
+.key-grid{display:flex;gap:8px;align-items:center;margin-top:6px}
+.form-input{width:100%;min-width:0;padding:9px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg-secondary);color:var(--text-secondary);font-family:monospace;font-size:13px;letter-spacing:1px}
+.form-input:focus-visible{outline:2px solid var(--primary-dark);outline-offset:2px}
+.copy-btn{flex-shrink:0}.copy-feedback{font-size:12px;color:var(--primary-dark);margin-top:5px;min-height:18px}.copy-feedback.error{color:var(--danger)}
+
+.setup-success{font-size:13px;color:var(--success);font-weight:600;text-align:center;margin-top:10px}
+@media(max-width:360px){.modal-box{padding:22px 18px}.otp-header{padding:0 12px}.key-grid{gap:5px}.key-grid .form-input{padding:8px 6px;font-size:11px;letter-spacing:.5px}.copy-btn{padding:8px 10px}}
+
+
+/* 플랫폼 다운로드: 스토어 아이콘 인라인, 외부 리소스 로딩 없음. */
+.app-download-title{font-size:12px;font-weight:700;color:var(--text-secondary);margin:2px 0 8px}
+.app-download-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.otp-install a.app-download-button{display:flex;align-items:center;gap:9px;min-height:56px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--surface);color:var(--text);text-decoration:none;font-weight:400}
+.otp-install a.app-download-button:hover{border-color:var(--primary-dark);background:var(--bg-secondary)}
+.store-icon{width:27px;height:29px;flex-shrink:0}
+.download-label{display:flex;flex-direction:column;min-width:0;line-height:1.4}.download-label b{font-size:13px;font-weight:700}.download-label>span{font-size:11px;color:var(--muted);white-space:nowrap}
+.download-external{width:13px;height:13px;flex-shrink:0;color:var(--muted);margin-left:auto}
+.app-download-option{display:flex;flex-direction:column;gap:4px;min-width:0}
+.qr-toggle{align-self:flex-start;min-height:44px;padding:4px 8px;border:0;border-radius:6px;background:transparent;color:var(--primary-dark);font-size:11px;font-weight:700;text-decoration:underline;text-underline-offset:3px;cursor:pointer;transition:background .16s ease,transform .16s ease}
+.qr-toggle:hover{background:var(--primary-light);transform:translateY(-1px)}.qr-toggle:focus-visible{outline:2px solid var(--primary-dark);outline-offset:2px}
+.download-qr-layer{position:fixed;inset:0;z-index:600;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(15,23,42,.48);overflow-y:auto;overscroll-behavior:contain}
+.download-qr-dialog{position:relative;flex-shrink:0;width:100%;max-width:380px;margin:auto;padding:34px 22px 22px;border:1px solid var(--border);border-radius:12px;background:var(--surface);box-shadow:0 12px 40px rgba(0,0,0,.2);text-align:center}
+.download-qr-title{padding:0 20px;font-size:20px;font-weight:700;line-height:1.5;letter-spacing:-.4px}
+.download-qr-subtitle{margin-top:5px;font-size:12px;line-height:1.6;color:var(--muted)}
+.download-qr-image{display:block;width:256px;max-width:100%;height:auto;aspect-ratio:1;margin:18px auto;padding:10px;border:1px solid var(--border);border-radius:8px;background:#fff;image-rendering:pixelated}
+.download-qr-description{margin:0 0 20px;color:var(--text-secondary);font-size:12px;line-height:1.75}
+.download-qr-dialog .download-qr-store{display:flex;width:100%;min-height:44px;white-space:normal;line-height:1.5}
+@media(max-width:360px){.download-qr-dialog{padding:32px 18px 18px}.download-qr-title{font-size:18px}}
+
+
+
+
+
+
+@media(max-width:360px){.otp-install a.app-download-button{gap:6px;padding:8px 7px;min-height:52px}.store-icon{width:23px;height:26px}.download-external{display:none}.download-label b{font-size:12px}.download-label>span{font-size:10px}.app-download-grid{gap:10px}}
+
+@media(max-width:360px){.modal-box .otp-logo{height:26px;width:auto}}
+
+/* 등록 wizard: 한 번에 현재 단계와 선택한 등록 방법만 표시합니다. */
+.wizard-progress{position:relative;display:flex;gap:8px;list-style:none;margin:6px 0 8px;padding:0}
+.wizard-progress li{position:relative;display:flex;align-items:center;flex:1;justify-content:center;min-width:0;color:var(--muted);font-size:11px}
+.wizard-progress li:not(:last-child)::after{content:"";position:absolute;z-index:0;top:12px;left:calc(50% + 10px);right:calc(-50% + 2px);height:2px;border-radius:2px;background:var(--border);transition:background .2s ease}
+.wizard-progress li.done::after{background:var(--primary)}
+.wizard-step{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:5px;min-height:54px;min-width:0;padding:0 6px 4px;border:0;border-radius:8px;background:transparent;color:inherit;font:inherit;white-space:nowrap;cursor:pointer;transition:background .16s ease,color .16s ease,transform .16s ease}
+.wizard-step:hover{background:transparent;color:var(--primary-dark);transform:none}.wizard-step:active{transform:none}
+.wizard-step:focus-visible{outline:none;color:var(--primary-dark)}.wizard-step:focus-visible>span{outline:2px solid var(--primary-dark);outline-offset:3px}.wizard-step[aria-disabled="true"]{color:var(--muted)}
+.wizard-step>span{width:24px;height:24px;display:inline-flex;flex:0 0 24px;justify-content:center;align-items:center;border:2px solid var(--border);border-radius:50%;background:var(--surface);color:var(--muted);font-size:10px;font-weight:700;transition:border-color .18s ease,background .18s ease,color .18s ease}
+.wizard-step:hover>span{border-color:var(--primary-dark);background:var(--primary-light);color:var(--primary-dark)}
+.wizard-progress li[aria-current="step"]>.wizard-step{color:var(--primary-dark);font-weight:700}.wizard-progress li[aria-current="step"]>.wizard-step>span{border-color:var(--primary);background:var(--primary);color:var(--text)}
+.wizard-progress li.done>.wizard-step>span{border-color:var(--primary);background:var(--primary-light);color:var(--primary-dark);font-size:0}.wizard-progress li.done>.wizard-step>span::after{content:"\2713";font-size:12px}
+.wizard-nav-hint{margin:0 0 16px;color:var(--muted);font-size:10px;line-height:1.5;text-align:center}
+.wizard-nav-feedback{margin:-8px 0 14px;color:var(--primary-dark);font-size:11px;line-height:1.5;text-align:center;opacity:0;transform:translateY(-3px);transition:opacity .16s ease,transform .16s ease}.wizard-nav-feedback.is-visible{opacity:1;transform:translateY(0)}
+.wizard-title{font-size:18px;line-height:1.5;font-weight:700;letter-spacing:-.4px;margin:0 0 8px;outline:none}
+.wizard-description{font-size:13px;color:var(--text-secondary);line-height:1.65;margin:0 0 18px}
+.wizard-choice-row{display:flex;gap:8px}.wizard-choice-row>.btn{flex:1;min-height:40px;padding:10px 8px}
+.wizard-choice-row>.btn[aria-pressed="true"]{border-color:var(--primary-dark);box-shadow:0 0 0 2px var(--primary-light)}
+.install-question,.install-help{transition:opacity .2s ease,transform .2s ease}.install-question{opacity:1;transform:translateY(0)}.install-question.screen-exit,.install-help.screen-exit{opacity:0;transform:translateY(-6px);pointer-events:none}.install-question.screen-enter,.install-help.screen-enter{opacity:0;transform:translateY(7px)}.install-help{margin-top:18px;opacity:1;transform:translateY(0)}.install-help .otp-install{margin-bottom:10px}.wizard-pane,.method-content{transition:opacity .18s ease,transform .18s ease}.wizard-pane.screen-exit,.method-content.screen-exit{opacity:0;transform:translateY(-5px);pointer-events:none}.wizard-pane.screen-enter,.method-content.screen-enter{opacity:0;transform:translateY(7px)}.modal-box{transition:transform .2s ease,opacity .2s ease}.modal-box.screen-enter{opacity:0;transform:translateY(8px) scale(.99)}.modal-box.screen-exit{opacity:0;transform:translateY(-6px) scale(.99)}
+.wizard-hint{font-size:12px;color:var(--muted);line-height:1.65;margin:10px 0 12px}
+.install-actions{display:flex;justify-content:flex-end;margin-top:12px}.install-actions>.btn{min-width:120px;min-height:44px}
+
+.wizard-methods{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.method-choice{border:1px solid var(--border-dark);border-radius:10px;padding:12px 9px;background:var(--surface);color:var(--text);text-align:left;line-height:1.6}
+.method-choice>b{display:block;font-size:13px}.method-choice>span{display:block;font-size:11px;color:var(--muted)}
+.method-choice:hover,.method-choice[aria-pressed="true"]{border-color:var(--primary-dark);background:var(--primary-light)}
+.method-choice:disabled{color:var(--muted);opacity:.55;cursor:not-allowed;border-color:var(--border);background:var(--surface)}
+.method-choice:focus-visible{outline:2px solid var(--primary-dark);outline-offset:2px}
+.method-content{margin-top:14px;border-top:1px solid var(--border);padding-top:12px}
+.setup-qr-box{display:flex;justify-content:center}.setup-qr-box img{width:180px;height:180px;image-rendering:pixelated;background:#fff}
+.wizard-actions{margin-top:22px}.wizard-actions .btn{min-height:36px;padding-left:12px;padding-right:12px;flex:1}
+.otp-shell.setup .setup-success{margin:16px 0 4px;line-height:1.65;font-size:15px}
+@media(max-width:360px){.wizard-progress{gap:2px;margin-bottom:8px}.wizard-step{gap:4px;padding:0 2px 4px;font-size:10px}.wizard-progress li{font-size:10px}.wizard-title{font-size:17px}.wizard-methods{gap:8px}.method-choice{padding:10px 8px}.method-choice>b{font-size:12px}.method-choice>span{font-size:10px}.setup-qr-box img{width:160px;height:160px}}
+
+
+/* Office Suite 공통 OTP UI */
+:host{--primary-light:color-mix(in oklch,var(--primary) 14%,transparent);--bg-secondary:#F3F4FD}
+
+.btn-primary{background:var(--primary);color:#1E1B4B;border-color:transparent;box-shadow:0 2px 6px color-mix(in oklch,var(--primary) 18%,transparent)}
+.btn-primary:hover:not(:disabled){background:color-mix(in oklch,var(--primary) 84%,var(--primary-dark));color:#1E1B4B;transform:translateY(-1px)}
+.btn-primary:active:not(:disabled){transform:translateY(0)}
+.btn-primary:focus-visible,.btn-ghost:focus-visible{outline:2px solid var(--primary-dark);outline-offset:3px}
+.btn-ghost{background:var(--bg-secondary);color:var(--text-secondary);border-color:transparent}
+.btn-ghost:hover:not(:disabled){background:#eef2f1;border-color:var(--border);color:var(--text-secondary)}
+.modal-box{border:1px solid var(--border);border-radius:12px;box-shadow:0 16px 40px rgba(15,23,42,.16)}
+.modal-close{width:44px;height:44px;right:10px;top:10px;color:var(--text-secondary)}
+.modal-close:hover{background:var(--bg-secondary);color:var(--text)}
+.otp-actions .btn,.wizard-actions .btn{min-height:44px}
+
+.wizard-choice-row>.btn{min-height:44px}
+.wizard-methods .method-choice{min-height:64px;border-radius:6px}
+.otp-install a.app-download-button{border-radius:6px}
+.form-input{border-radius:6px;background:#fff}
+@media(max-width:760px){.modal-backdrop{padding:max(16px,env(safe-area-inset-top)) 0 max(16px,env(safe-area-inset-bottom))}.modal-box{max-width:min(480px,calc(100vw - 32px))}.otp-shell.setup .modal-box{max-width:min(480px,calc(100vw - 32px))}}
+@media(max-width:480px){.download-qr{flex-direction:column;align-items:center;text-align:center;gap:4px}.download-qr img{width:96px;height:96px;flex-basis:96px}.modal-box,.otp-shell.setup .modal-box{width:calc(100vw - 24px);margin:0 12px;padding:22px 18px}.wizard-actions{gap:8px}.wizard-actions .btn{padding-inline:8px}}
+@media(max-width:360px){.modal-box,.otp-shell.setup .modal-box{padding:20px 16px}.otp-header{padding:0 10px}.wizard-progress{gap:4px;margin-bottom:18px}.wizard-progress li{gap:3px;white-space:normal;text-align:center;line-height:1.3;font-size:10px}.wizard-choice-row>.btn{white-space:normal;line-height:1.35}.otpx-wrap{gap:5px;height:48px}.otpx-box{width:clamp(30px,10.5vw,36px);height:46px;font-size:18px}.wizard-methods{gap:6px}.method-choice{padding:10px 7px}.setup-qr-box img{width:156px;height:156px}}
+.otpx-wrap{position:relative;display:flex;gap:clamp(5px,2.2vw,8px);justify-content:center;align-items:center;height:54px;transition:gap .45s cubic-bezier(.25,1,.5,1)}.otpx-box{width:clamp(34px,13vw,42px);height:52px;background:#fff;border:1.5px solid var(--border,#DBDBDB);border-radius:12px;text-align:center;font-size:21px;font-weight:700;color:var(--text,#1B1D1F);outline:none;transition:transform .55s cubic-bezier(.25,1,.5,1),border-color .35s ease,opacity .35s ease,color .25s ease,box-shadow .35s ease}.otpx-box:focus{border-color:var(--primary-dark,#4338CA);box-shadow:0 0 0 3px color-mix(in srgb,var(--primary-dark,#4338CA) 18%,transparent)}.otpx-box.otpx-pop{animation:otpxpop .18s cubic-bezier(.34,1.56,.64,1)}@keyframes otpxpop{0%{transform:scale(1)}50%{transform:scale(1.12)}100%{transform:scale(1)}}.otpx-ico{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);opacity:0;transition:opacity .3s ease;z-index:5;pointer-events:none}.otpx-ico.show{opacity:1}.otpx-spin{width:22px;height:22px;border:2.5px solid var(--border,#DBDBDB);border-top-color:var(--primary-dark,#4338CA);border-radius:50%;animation:otpxspin .8s linear infinite}@keyframes otpxspin{to{transform:rotate(360deg)}}.otpx-shake{animation:otpxshake .4s cubic-bezier(.36,.07,.19,.97)}@keyframes otpxshake{10%,90%{transform:translateX(-2px)}20%,80%{transform:translateX(3px)}30%,50%,70%{transform:translateX(-5px)}40%,60%{transform:translateX(5px)}}.otpx-check path{stroke-dasharray:30;stroke-dashoffset:30;animation:otpxdraw .45s .1s ease forwards}@keyframes otpxdraw{to{stroke-dashoffset:0}}.otpx-result{margin-top:12px;padding:0 8px;max-width:100%;font-size:14px;font-weight:700;text-align:center;letter-spacing:0;line-height:1.45;overflow-wrap:anywhere;opacity:0;transform:translateY(5px);transition:opacity .3s ease,transform .3s ease}.otpx-result.show{opacity:1;transform:translateY(0)}.otpx-result.ok{color:var(--success,#0f766e)}.otpx-result.ng{color:var(--danger,#b91c1c)}@media(max-width:360px){.otpx-wrap{gap:5px;height:48px}.otpx-box{width:clamp(30px,10.5vw,36px);height:46px;font-size:18px}.otpx-result{font-size:13px}}
+.otp-header .otp-logo{object-fit:contain;max-width:100%}

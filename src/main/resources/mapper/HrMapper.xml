@@ -1,0 +1,700 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.portfolio.worksystem.mapper.HrMapper">
+
+    <select id="findLeaveBalance" resultType="LeaveBalance">
+        SELECT id, user_id, balance_year, total_days, used_days, adjusted_days, note
+        FROM leave_balances
+        WHERE user_id = #{userId}
+          AND balance_year = #{year}
+    </select>
+
+    <insert id="insertLeaveBalance" parameterType="LeaveBalance" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO leave_balances(user_id, balance_year, total_days, used_days, adjusted_days, note)
+        VALUES(#{userId}, #{balanceYear}, #{totalDays}, #{usedDays}, #{adjustedDays}, #{note})
+    </insert>
+
+    <insert id="upsertLeaveBalance" parameterType="LeaveBalance">
+        INSERT INTO leave_balances(user_id, balance_year, total_days, used_days, adjusted_days, note)
+        VALUES(#{userId}, #{balanceYear}, #{totalDays}, #{usedDays}, #{adjustedDays}, #{note})
+        ON DUPLICATE KEY UPDATE total_days = VALUES(total_days),
+                                adjusted_days = VALUES(adjusted_days),
+                                note = VALUES(note)
+    </insert>
+
+    <update id="increaseUsedLeave">
+        UPDATE leave_balances
+        SET used_days = used_days + #{days}
+        WHERE user_id = #{userId}
+          AND balance_year = #{year}
+    </update>
+
+    <!-- ── [A5] 연차 원장·수동 조정 (V73) ── -->
+    <select id="findLeaveBalancesByYear" resultType="LeaveBalance">
+        SELECT id, user_id, balance_year, total_days, used_days, adjusted_days, note
+        FROM leave_balances
+        WHERE balance_year = #{year}
+    </select>
+
+    <update id="increaseAdjustedLeave">
+        UPDATE leave_balances
+        SET adjusted_days = adjusted_days + #{delta}
+        WHERE user_id = #{userId}
+          AND balance_year = #{year}
+    </update>
+
+    <insert id="insertLeaveBalanceAdjustment" parameterType="LeaveBalanceAdjustment">
+        INSERT INTO leave_balance_adjustments(user_id, balance_year, delta_days, reason, adjusted_by)
+        VALUES(#{userId}, #{balanceYear}, #{deltaDays}, #{reason}, #{adjustedBy})
+    </insert>
+
+    <select id="findLeaveBalanceAdjustments" resultType="LeaveBalanceAdjustment">
+        SELECT a.id, a.user_id, u.name AS member_name, t.name AS team_name,
+               a.balance_year, a.delta_days, a.reason, a.adjusted_by, au.name AS adjusted_by_name, a.created_at
+        FROM leave_balance_adjustments a
+        JOIN users u ON u.id = a.user_id
+        LEFT JOIN teams t ON t.id = u.team_id
+        LEFT JOIN users au ON au.id = a.adjusted_by
+        WHERE a.balance_year = #{year}
+        <if test="userId != null">AND a.user_id = #{userId}</if>
+        ORDER BY a.id DESC
+    </select>
+
+    <select id="findLeaveRequests" resultType="LeaveRequest">
+        SELECT lr.id, lr.user_id, u.username, u.name AS member_name, u.team_id, t.name AS team_name, u.contractor,
+               lr.type, (SELECT lt.label FROM leave_types lt WHERE lt.code = lr.type) AS type_label, lr.start_date, lr.end_date, lr.days, lr.annual_deducted_days, lr.reason, lr.status, lr.current_approval_step,
+               lr.approver_id, au.name AS approver_name, lr.approved_at, lr.rejected_reason, lr.cancel_reason, lr.created_at
+        FROM leave_requests lr
+        JOIN users u ON u.id = lr.user_id
+        LEFT JOIN teams t ON t.id = u.team_id
+        LEFT JOIN users au ON au.id = lr.approver_id
+        WHERE (#{userId} IS NULL OR lr.user_id = #{userId})
+          AND (#{teamId} IS NULL OR u.team_id = #{teamId})
+          AND (#{year} IS NULL OR YEAR(lr.start_date) = #{year})
+        ORDER BY lr.start_date DESC, lr.id DESC
+    </select>
+
+    <select id="findLeaveRequest" resultType="LeaveRequest">
+        SELECT lr.id, lr.user_id, u.username, u.name AS member_name, u.team_id, t.name AS team_name, u.contractor,
+               lr.type, (SELECT lt.label FROM leave_types lt WHERE lt.code = lr.type) AS type_label, lr.start_date, lr.end_date, lr.days, lr.annual_deducted_days, lr.reason, lr.status, lr.current_approval_step,
+               lr.approver_id, au.name AS approver_name, lr.approved_at, lr.rejected_reason, lr.cancel_reason, lr.created_at
+        FROM leave_requests lr
+        JOIN users u ON u.id = lr.user_id
+        LEFT JOIN teams t ON t.id = u.team_id
+        LEFT JOIN users au ON au.id = lr.approver_id
+        WHERE lr.id = #{id}
+    </select>
+
+    <!-- 특정일에 걸친 본인 승인 휴가(반차 포함) — 출퇴근/정정 판정 보정용 -->
+    <select id="findApprovedLeaveForDate" resultType="LeaveRequest">
+        SELECT lr.id, lr.user_id, lr.type, (SELECT lt.label FROM leave_types lt WHERE lt.code = lr.type) AS type_label, lr.start_date, lr.end_date, lr.days, lr.status
+        FROM leave_requests lr
+        WHERE lr.status IN ('APPROVED', 'CANCEL_PENDING')
+          AND lr.user_id = #{userId}
+          AND lr.start_date &lt;= #{workDate}
+          AND lr.end_date >= #{workDate}
+        ORDER BY lr.id DESC
+        LIMIT 1
+    </select>
+
+    <!-- 기간과 겹치는 전 직원 승인 휴가 — 일별 근태 현황 표시용 -->
+    <select id="findApprovedLeavesInRange" resultType="LeaveRequest">
+        SELECT lr.id, lr.user_id, lr.type, (SELECT lt.label FROM leave_types lt WHERE lt.code = lr.type) AS type_label, lr.start_date, lr.end_date, lr.days, lr.status
+        FROM leave_requests lr
+        WHERE lr.status IN ('APPROVED', 'CANCEL_PENDING')
+          AND lr.start_date &lt;= #{toDate}
+          AND lr.end_date >= #{fromDate}
+    </select>
+
+    <!-- ── [D3] 연차 부여 기준 정책 (V77) ── -->
+    <select id="findLeaveAccrualPolicy" resultType="LeaveAccrualPolicy">
+        SELECT p.id, p.basis, p.effective_from_year, p.max_annual_days,
+               p.updated_by, u.name AS updated_by_name, p.updated_at
+        FROM leave_accrual_policy p
+        LEFT JOIN users u ON u.id = p.updated_by
+        WHERE p.id = 1
+    </select>
+
+    <update id="updateLeaveAccrualPolicy" parameterType="LeaveAccrualPolicy">
+        UPDATE leave_accrual_policy
+        SET basis = #{basis}, effective_from_year = #{effectiveFromYear},
+            max_annual_days = #{maxAnnualDays}, updated_by = #{updatedBy}
+        WHERE id = 1
+    </update>
+
+    <select id="findLeaveBalancesFromYear" resultType="LeaveBalance">
+        SELECT id, user_id, balance_year, total_days, used_days, adjusted_days, note
+        FROM leave_balances
+        WHERE balance_year >= #{year}
+    </select>
+
+    <update id="updateLeaveBalanceTotal">
+        UPDATE leave_balances SET total_days = #{totalDays} WHERE id = #{id}
+    </update>
+
+    <!-- ── [C2] 휴가 종류 정의 (V76) ── -->
+    <select id="findLeaveTypeDefs" resultType="LeaveTypeDef">
+        SELECT code, label, day_weight, deduct_annual, evidence_required, active, sort_order
+        FROM leave_types
+        ORDER BY sort_order, code
+    </select>
+
+    <select id="findLeaveTypeDef" resultType="LeaveTypeDef">
+        SELECT code, label, day_weight, deduct_annual, evidence_required, active, sort_order
+        FROM leave_types
+        WHERE code = #{code}
+    </select>
+
+    <insert id="insertLeaveTypeDef" parameterType="LeaveTypeDef">
+        INSERT INTO leave_types(code, label, day_weight, deduct_annual, evidence_required, active, sort_order)
+        VALUES(#{code}, #{label}, #{dayWeight}, #{deductAnnual}, #{evidenceRequired}, #{active}, #{sortOrder})
+    </insert>
+
+    <update id="updateLeaveTypeDef" parameterType="LeaveTypeDef">
+        UPDATE leave_types
+        SET label = #{label}, day_weight = #{dayWeight}, deduct_annual = #{deductAnnual},
+            evidence_required = #{evidenceRequired}, active = #{active}, sort_order = #{sortOrder}
+        WHERE code = #{code}
+    </update>
+
+    <!-- ── [A4] 근태 월 마감 (V74) ── -->
+    <insert id="insertMonthLockEvent" parameterType="AttendanceMonthLockEvent">
+        INSERT INTO attendance_month_lock_events(ym, action, acted_by)
+        VALUES(#{ym}, #{action}, #{actedBy})
+    </insert>
+
+    <select id="findLatestMonthLockEvent" resultType="AttendanceMonthLockEvent">
+        SELECT id, ym, action, acted_by, created_at
+        FROM attendance_month_lock_events
+        WHERE ym = #{ym}
+        ORDER BY id DESC
+        LIMIT 1
+    </select>
+
+    <select id="findLockedMonths" resultType="string">
+        SELECT e.ym
+        FROM attendance_month_lock_events e
+        JOIN (SELECT ym, MAX(id) AS mid FROM attendance_month_lock_events GROUP BY ym) latest
+          ON latest.ym = e.ym AND latest.mid = e.id
+        WHERE e.action = 'LOCK'
+        ORDER BY e.ym DESC
+    </select>
+
+    <select id="findMonthLockEvents" resultType="AttendanceMonthLockEvent">
+        SELECT e.id, e.ym, e.action, e.acted_by, u.name AS acted_by_name, e.created_at
+        FROM attendance_month_lock_events e
+        LEFT JOIN users u ON u.id = e.acted_by
+        ORDER BY e.id DESC
+        LIMIT 50
+    </select>
+
+    <!-- [A8] 팀 부재 현황 — 같은 팀 승인 휴가(이름 포함) -->
+    <select id="findApprovedTeamLeaves" resultType="LeaveRequest">
+        SELECT lr.id, lr.user_id, u.name AS member_name, u.team_id, lr.type, (SELECT lt.label FROM leave_types lt WHERE lt.code = lr.type) AS type_label, lr.start_date, lr.end_date, lr.days, lr.status
+        FROM leave_requests lr
+        JOIN users u ON u.id = lr.user_id
+        WHERE lr.status IN ('APPROVED', 'CANCEL_PENDING')
+          AND u.team_id = #{teamId}
+          AND lr.start_date &lt;= #{toDate}
+          AND lr.end_date >= #{fromDate}
+        ORDER BY lr.start_date, lr.id
+    </select>
+
+    <insert id="insertLeaveRequest" parameterType="LeaveRequest" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO leave_requests(user_id, type, start_date, end_date, days, annual_deducted_days, reason, status, current_approval_step)
+        VALUES(#{userId}, #{type}, #{startDate}, #{endDate}, #{days}, #{annualDeductedDays}, #{reason}, #{status}, #{currentApprovalStep})
+    </insert>
+
+    <update id="updateLeaveStatus">
+        UPDATE leave_requests
+        SET status = #{status},
+            current_approval_step = CASE WHEN #{status} = 'PENDING' THEN current_approval_step ELSE NULL END,
+            approver_id = #{approverId},
+            approved_at = CASE WHEN #{status} = 'APPROVED' THEN NOW() ELSE NULL END,
+            rejected_reason = #{rejectedReason}
+        WHERE id = #{id}
+    </update>
+
+    <update id="updateLeaveCancelReason">
+        UPDATE leave_requests
+        SET cancel_reason = #{cancelReason}
+        WHERE id = #{id}
+    </update>
+
+    <update id="updateLeaveCurrentStep">
+        UPDATE leave_requests
+        SET current_approval_step = #{currentApprovalStep}
+        WHERE id = #{id}
+    </update>
+
+    <select id="findAttendanceSetting" resultType="AttendanceSetting">
+        SELECT id, default_start_time, default_end_time, updated_by
+        FROM attendance_settings
+        WHERE id = 1
+    </select>
+
+    <update id="updateAttendanceSetting">
+        UPDATE attendance_settings
+        SET default_start_time = #{defaultStartTime},
+            default_end_time = #{defaultEndTime},
+            updated_by = #{updatedBy}
+        WHERE id = 1
+    </update>
+
+    <select id="findAttendanceOverrides" resultType="AttendanceDayOverride">
+        SELECT id, work_date, start_time, end_time, note, created_by
+        FROM attendance_day_overrides
+        WHERE work_date BETWEEN #{fromDate} AND #{toDate}
+        ORDER BY work_date DESC
+    </select>
+
+    <select id="findAttendanceOverride" resultType="AttendanceDayOverride">
+        SELECT id, work_date, start_time, end_time, note, created_by
+        FROM attendance_day_overrides
+        WHERE work_date = #{workDate}
+    </select>
+
+    <insert id="upsertAttendanceOverride" parameterType="AttendanceDayOverride">
+        INSERT INTO attendance_day_overrides(work_date, start_time, end_time, note, created_by)
+        VALUES(#{workDate}, #{startTime}, #{endTime}, #{note}, #{createdBy})
+        ON DUPLICATE KEY UPDATE start_time = VALUES(start_time), end_time = VALUES(end_time), note = VALUES(note), created_by = VALUES(created_by)
+    </insert>
+
+    <delete id="deleteAttendanceOverride">
+        DELETE FROM attendance_day_overrides WHERE work_date = #{workDate}
+    </delete>
+
+    <select id="findCompanyHolidays" resultType="CompanyHoliday">
+        SELECT ch.id, ch.holiday_date, ch.name, ch.category, ch.created_by, u.name AS created_by_name
+        FROM company_holidays ch
+        LEFT JOIN users u ON u.id = ch.created_by
+        WHERE holiday_date BETWEEN #{fromDate} AND #{toDate}
+        ORDER BY holiday_date DESC
+    </select>
+
+    <select id="findCompanyHoliday" resultType="CompanyHoliday">
+        SELECT ch.id, ch.holiday_date, ch.name, ch.category, ch.created_by, u.name AS created_by_name
+        FROM company_holidays ch
+        LEFT JOIN users u ON u.id = ch.created_by
+        WHERE holiday_date = #{holidayDate}
+    </select>
+
+    <insert id="upsertCompanyHoliday" parameterType="CompanyHoliday">
+        INSERT INTO company_holidays(holiday_date, name, category, created_by)
+        VALUES(#{holidayDate}, #{name}, COALESCE(#{category}, 'COMPANY'), #{createdBy})
+        ON DUPLICATE KEY UPDATE name = VALUES(name), category = VALUES(category), created_by = VALUES(created_by)
+    </insert>
+
+    <delete id="deleteCompanyHoliday">
+        DELETE FROM company_holidays WHERE holiday_date = #{holidayDate}
+    </delete>
+
+    <select id="findCompanySchedules" resultType="CompanySchedule">
+        SELECT cs.id, cs.title, cs.description, cs.start_at, cs.end_at, cs.color,
+               cs.created_by, u.name AS created_by_name, cs.created_at, cs.updated_at
+        FROM company_schedules cs
+        LEFT JOIN users u ON u.id = cs.created_by
+        WHERE cs.start_at &lt;= #{toAt}
+          AND cs.end_at >= #{fromAt}
+        ORDER BY cs.start_at, cs.id
+    </select>
+
+    <insert id="insertCompanySchedule" parameterType="CompanySchedule" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO company_schedules(title, description, start_at, end_at, color, created_by)
+        VALUES(#{title}, #{description}, #{startAt}, #{endAt}, #{color}, #{createdBy})
+    </insert>
+
+    <update id="updateCompanySchedule" parameterType="CompanySchedule">
+        UPDATE company_schedules
+        SET title = #{title},
+            description = #{description},
+            start_at = #{startAt},
+            end_at = #{endAt},
+            color = #{color}
+        WHERE id = #{id}
+    </update>
+
+    <delete id="deleteCompanySchedule">
+        DELETE FROM company_schedules WHERE id = #{id}
+    </delete>
+
+    <select id="findAttendanceRecords" resultType="AttendanceRecord">
+        SELECT ar.id, ar.user_id, u.name AS member_name, u.team_id, t.name AS team_name,
+               ar.work_date, ar.check_in_at, ar.check_out_at, ar.status, ar.note
+        FROM attendance_records ar
+        JOIN users u ON u.id = ar.user_id
+        LEFT JOIN teams t ON t.id = u.team_id
+        WHERE (#{userId} IS NULL OR ar.user_id = #{userId})
+          AND (#{teamId} IS NULL OR u.team_id = #{teamId})
+          AND ar.work_date BETWEEN #{fromDate} AND #{toDate}
+        ORDER BY ar.work_date DESC, t.display_order, u.name
+    </select>
+
+    <select id="findAttendanceByUserDate" resultType="AttendanceRecord">
+        SELECT ar.id, ar.user_id, u.name AS member_name, u.team_id, t.name AS team_name,
+               ar.work_date, ar.check_in_at, ar.check_out_at, ar.status, ar.note
+        FROM attendance_records ar
+        JOIN users u ON u.id = ar.user_id
+        LEFT JOIN teams t ON t.id = u.team_id
+        WHERE ar.user_id = #{userId}
+          AND ar.work_date = #{workDate}
+    </select>
+
+    <!-- [UX18] 미퇴근 상태 최근 출근 기록 (자정 넘긴 야근 퇴근용) -->
+    <select id="findLatestOpenAttendance" resultType="AttendanceRecord">
+        SELECT ar.id, ar.user_id, u.name AS member_name, u.team_id, t.name AS team_name,
+               ar.work_date, ar.check_in_at, ar.check_out_at, ar.status, ar.note
+        FROM attendance_records ar
+        JOIN users u ON u.id = ar.user_id
+        LEFT JOIN teams t ON t.id = u.team_id
+        WHERE ar.user_id = #{userId}
+          AND ar.check_in_at IS NOT NULL
+          AND ar.check_out_at IS NULL
+        ORDER BY ar.work_date DESC
+        LIMIT 1
+    </select>
+
+    <insert id="insertAttendance" parameterType="AttendanceRecord" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO attendance_records(user_id, work_date, check_in_at, check_out_at, status, note, source)
+        VALUES(#{userId}, #{workDate}, #{checkInAt}, #{checkOutAt}, #{status}, #{note}, COALESCE(#{source}, 'WEB'))
+    </insert>
+
+    <update id="updateAttendanceCheckOut">
+        UPDATE attendance_records
+        SET check_out_at = #{checkOutAt}, status = #{status}
+        WHERE id = #{id}
+    </update>
+
+    <update id="updateAttendanceRecord">
+        UPDATE attendance_records
+        SET check_in_at = #{checkInAt}, check_out_at = #{checkOutAt}, status = #{status}
+        WHERE id = #{id}
+    </update>
+
+    <!-- [A3] HR 직권 정정 감사 로그 (V72) -->
+    <insert id="insertAttendanceAdminAdjustment" parameterType="AttendanceAdminAdjustment">
+        INSERT INTO attendance_admin_adjustments(user_id, work_date,
+            before_check_in_at, before_check_out_at, before_status,
+            after_check_in_at, after_check_out_at, after_status, reason, adjusted_by)
+        VALUES(#{userId}, #{workDate},
+            #{beforeCheckInAt}, #{beforeCheckOutAt}, #{beforeStatus},
+            #{afterCheckInAt}, #{afterCheckOutAt}, #{afterStatus}, #{reason}, #{adjustedBy})
+    </insert>
+
+    <insert id="insertAttendanceCorrection" parameterType="AttendanceCorrection" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO attendance_corrections(user_id, work_date, attendance_record_id,
+            original_check_in_at, original_check_out_at, original_status,
+            requested_check_in, requested_check_out, reason, status, current_approval_step)
+        VALUES(#{userId}, #{workDate}, #{attendanceRecordId},
+            #{originalCheckInAt}, #{originalCheckOutAt}, #{originalStatus},
+            #{requestedCheckIn}, #{requestedCheckOut}, #{reason}, #{status}, #{currentApprovalStep})
+    </insert>
+
+    <select id="findAttendanceCorrections" resultType="AttendanceCorrection">
+        SELECT ac.id, ac.user_id, u.username, u.name AS member_name, u.team_id, t.name AS team_name, u.contractor,
+               ac.work_date, ac.attendance_record_id,
+               ac.original_check_in_at, ac.original_check_out_at, ac.original_status,
+               ac.requested_check_in, ac.requested_check_out, ac.reason,
+               ac.status, ac.current_approval_step,
+               ac.approver_id, au.name AS approver_name, ac.approved_at, ac.rejected_reason, ac.created_at
+        FROM attendance_corrections ac
+        JOIN users u ON u.id = ac.user_id
+        LEFT JOIN teams t ON t.id = u.team_id
+        LEFT JOIN users au ON au.id = ac.approver_id
+        WHERE (#{userId} IS NULL OR ac.user_id = #{userId})
+          AND (#{teamId} IS NULL OR u.team_id = #{teamId})
+          AND (#{year} IS NULL OR YEAR(ac.work_date) = #{year})
+        ORDER BY ac.work_date DESC, ac.id DESC
+    </select>
+
+    <select id="findAttendanceCorrection" resultType="AttendanceCorrection">
+        SELECT ac.id, ac.user_id, u.username, u.name AS member_name, u.team_id, t.name AS team_name, u.contractor,
+               ac.work_date, ac.attendance_record_id,
+               ac.original_check_in_at, ac.original_check_out_at, ac.original_status,
+               ac.requested_check_in, ac.requested_check_out, ac.reason,
+               ac.status, ac.current_approval_step,
+               ac.approver_id, au.name AS approver_name, ac.approved_at, ac.rejected_reason, ac.created_at
+        FROM attendance_corrections ac
+        JOIN users u ON u.id = ac.user_id
+        LEFT JOIN teams t ON t.id = u.team_id
+        LEFT JOIN users au ON au.id = ac.approver_id
+        WHERE ac.id = #{id}
+    </select>
+
+    <select id="findPendingCorrections" resultType="AttendanceCorrection">
+        SELECT ac.id, ac.user_id, ac.work_date, ac.status
+        FROM attendance_corrections ac
+        JOIN users u ON u.id = ac.user_id
+        WHERE ac.status = 'PENDING'
+          AND (#{userId} IS NULL OR ac.user_id = #{userId})
+          AND (#{teamId} IS NULL OR u.team_id = #{teamId})
+          AND ac.work_date BETWEEN #{fromDate} AND #{toDate}
+    </select>
+
+    <select id="existsPendingCorrection" resultType="boolean">
+        SELECT EXISTS(
+            SELECT 1 FROM attendance_corrections ac
+            WHERE ac.user_id = #{userId}
+              AND ac.work_date = #{workDate}
+              AND ac.status = 'PENDING'
+        )
+    </select>
+
+    <update id="updateAttendanceCorrectionStatus">
+        UPDATE attendance_corrections
+        SET status = #{status},
+            current_approval_step = CASE WHEN #{status} = 'PENDING' THEN current_approval_step ELSE NULL END,
+            approver_id = #{approverId},
+            approved_at = CASE WHEN #{status} = 'APPROVED' THEN NOW() ELSE NULL END,
+            rejected_reason = #{rejectedReason}
+        WHERE id = #{id}
+    </update>
+
+    <update id="updateAttendanceCorrectionCurrentStep">
+        UPDATE attendance_corrections
+        SET current_approval_step = #{currentApprovalStep}
+        WHERE id = #{id}
+    </update>
+
+    <select id="findBusinessTrips" resultType="BusinessTrip">
+        SELECT bt.id, bt.user_id, u.username, u.name AS member_name, u.team_id, t.name AS team_name,
+               bt.start_date, bt.end_date, bt.destination, bt.purpose,
+               bt.transport_cost, bt.lodging_cost, bt.meal_cost, bt.daily_allowance, bt.etc_cost, bt.cost_note,
+               btr.id AS receipt_id, btr.original_filename AS receipt_original_filename,
+               bt.status, bt.current_approval_step,
+               bt.approver_id, au.name AS approver_name, bt.approved_at, bt.rejected_reason, bt.created_at
+        FROM business_trips bt
+        JOIN users u ON u.id = bt.user_id
+        LEFT JOIN teams t ON t.id = u.team_id
+        LEFT JOIN users au ON au.id = bt.approver_id
+        LEFT JOIN business_trip_receipts btr ON btr.trip_id = bt.id
+        WHERE (#{userId} IS NULL OR bt.user_id = #{userId})
+          AND (#{teamId} IS NULL OR u.team_id = #{teamId})
+          AND (#{year} IS NULL OR YEAR(bt.start_date) = #{year})
+        ORDER BY bt.start_date DESC, bt.id DESC
+    </select>
+
+    <select id="findApprovedBusinessTrips" resultType="BusinessTrip">
+        SELECT bt.id, bt.user_id, u.username, u.name AS member_name, u.team_id, t.name AS team_name,
+               bt.start_date, bt.end_date, bt.destination, bt.purpose,
+               bt.transport_cost, bt.lodging_cost, bt.meal_cost, bt.daily_allowance, bt.etc_cost, bt.cost_note,
+               btr.id AS receipt_id, btr.original_filename AS receipt_original_filename,
+               bt.status, bt.current_approval_step,
+               bt.approver_id, au.name AS approver_name, bt.approved_at, bt.rejected_reason, bt.created_at
+        FROM business_trips bt
+        JOIN users u ON u.id = bt.user_id
+        LEFT JOIN teams t ON t.id = u.team_id
+        LEFT JOIN users au ON au.id = bt.approver_id
+        LEFT JOIN business_trip_receipts btr ON btr.trip_id = bt.id
+        WHERE bt.status = 'APPROVED'
+          AND (#{userId} IS NULL OR bt.user_id = #{userId})
+          AND (#{teamId} IS NULL OR u.team_id = #{teamId})
+          AND bt.start_date &lt;= #{toDate}
+          AND bt.end_date >= #{fromDate}
+        ORDER BY bt.start_date DESC, bt.id DESC
+    </select>
+
+    <select id="findBusinessTrip" resultType="BusinessTrip">
+        SELECT bt.id, bt.user_id, u.username, u.name AS member_name, u.team_id, t.name AS team_name,
+               bt.start_date, bt.end_date, bt.destination, bt.purpose,
+               bt.transport_cost, bt.lodging_cost, bt.meal_cost, bt.daily_allowance, bt.etc_cost, bt.cost_note,
+               btr.id AS receipt_id, btr.original_filename AS receipt_original_filename,
+               bt.status, bt.current_approval_step,
+               bt.approver_id, au.name AS approver_name, bt.approved_at, bt.rejected_reason, bt.created_at
+        FROM business_trips bt
+        JOIN users u ON u.id = bt.user_id
+        LEFT JOIN teams t ON t.id = u.team_id
+        LEFT JOIN users au ON au.id = bt.approver_id
+        LEFT JOIN business_trip_receipts btr ON btr.trip_id = bt.id
+        WHERE bt.id = #{id}
+    </select>
+
+    <insert id="insertBusinessTrip" parameterType="BusinessTrip" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO business_trips(user_id, start_date, end_date, destination, purpose,
+                                   transport_cost, lodging_cost, meal_cost, daily_allowance, etc_cost, cost_note,
+                                   status, current_approval_step)
+        VALUES(#{userId}, #{startDate}, #{endDate}, #{destination}, #{purpose},
+               #{transportCost}, #{lodgingCost}, #{mealCost}, #{dailyAllowance}, #{etcCost}, #{costNote},
+               #{status}, #{currentApprovalStep})
+    </insert>
+
+    <insert id="insertBusinessTripExpense" parameterType="BusinessTripExpense" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO business_trip_expenses(trip_id, expense_type, description, amount, note, display_order)
+        VALUES(#{tripId}, #{expenseType}, #{description}, #{amount}, #{note}, #{displayOrder})
+    </insert>
+
+    <select id="findBusinessTripExpenses" resultType="BusinessTripExpense">
+        SELECT id, trip_id, expense_type, description, amount, note, display_order, created_at
+        FROM business_trip_expenses
+        WHERE trip_id = #{tripId}
+        ORDER BY display_order, id
+    </select>
+
+    <insert id="insertBusinessTripReceipt" parameterType="BusinessTripReceipt" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO business_trip_receipts(trip_id, original_filename, stored_filename, content_type, file_size, uploaded_by)
+        VALUES(#{tripId}, #{originalFilename}, #{storedFilename}, #{contentType}, #{fileSize}, #{uploadedBy})
+    </insert>
+
+    <select id="findBusinessTripReceipt" resultType="BusinessTripReceipt">
+        SELECT id, trip_id, original_filename, stored_filename, content_type, file_size, uploaded_by, created_at
+        FROM business_trip_receipts
+        WHERE id = #{id}
+    </select>
+
+    <select id="findBusinessTripReceiptByTripId" resultType="BusinessTripReceipt">
+        SELECT id, trip_id, original_filename, stored_filename, content_type, file_size, uploaded_by, created_at
+        FROM business_trip_receipts
+        WHERE trip_id = #{tripId}
+    </select>
+
+    <update id="updateBusinessTripStatus">
+        UPDATE business_trips
+        SET status = #{status},
+            current_approval_step = CASE WHEN #{status} = 'PENDING' THEN current_approval_step ELSE NULL END,
+            approver_id = #{approverId},
+            approved_at = CASE WHEN #{status} = 'APPROVED' THEN NOW() ELSE NULL END,
+            rejected_reason = #{rejectedReason}
+        WHERE id = #{id}
+    </update>
+
+    <update id="updateBusinessTripCurrentStep">
+        UPDATE business_trips
+        SET current_approval_step = #{currentApprovalStep}
+        WHERE id = #{id}
+    </update>
+
+    <select id="findApprovedFlexTimes" resultType="FlexTimeRequest">
+        SELECT ft.id, ft.user_id, u.username, u.name AS member_name, u.team_id, t.name AS team_name,
+               ft.shift_group, sg.label AS shift_group_label, sg.start_time AS shift_start_time, sg.end_time AS shift_end_time,
+               ft.start_date, ft.end_date, ft.reason,
+               ft.status, ft.current_approval_step,
+               ft.approver_id, au.name AS approver_name, ft.approved_at, ft.rejected_reason, ft.created_at
+        FROM flex_time_requests ft
+        JOIN users u ON u.id = ft.user_id
+        LEFT JOIN teams t ON t.id = u.team_id
+        LEFT JOIN users au ON au.id = ft.approver_id
+        LEFT JOIN shift_groups sg ON sg.code = ft.shift_group
+        WHERE ft.status = 'APPROVED'
+          AND (#{userId} IS NULL OR ft.user_id = #{userId})
+          AND (#{teamId} IS NULL OR u.team_id = #{teamId})
+          AND ft.start_date &lt;= #{toDate}
+          AND ft.end_date >= #{fromDate}
+        ORDER BY ft.start_date DESC, ft.id DESC
+    </select>
+
+    <insert id="insertFlexTimeRequest" parameterType="FlexTimeRequest" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO flex_time_requests(user_id, shift_group, start_date, end_date, reason, status, current_approval_step)
+        VALUES(#{userId}, #{shiftGroup}, #{startDate}, #{endDate}, #{reason}, #{status}, #{currentApprovalStep})
+    </insert>
+
+    <select id="findFlexTimeRequests" resultType="FlexTimeRequest">
+        SELECT ft.id, ft.user_id, u.username, u.name AS member_name, u.team_id, t.name AS team_name,
+               ft.shift_group, sg.label AS shift_group_label, sg.start_time AS shift_start_time, sg.end_time AS shift_end_time,
+               ft.start_date, ft.end_date, ft.reason, ft.status, ft.current_approval_step,
+               ft.approver_id, au.name AS approver_name, ft.approved_at, ft.rejected_reason, ft.created_at
+        FROM flex_time_requests ft
+        JOIN users u ON u.id = ft.user_id
+        LEFT JOIN teams t ON t.id = u.team_id
+        LEFT JOIN users au ON au.id = ft.approver_id
+        LEFT JOIN shift_groups sg ON sg.code = ft.shift_group
+        WHERE (#{userId} IS NULL OR ft.user_id = #{userId})
+          AND (#{teamId} IS NULL OR u.team_id = #{teamId})
+          AND (#{year} IS NULL OR YEAR(ft.start_date) = #{year})
+        ORDER BY ft.start_date DESC, ft.id DESC
+    </select>
+
+    <select id="findFlexTimeRequest" resultType="FlexTimeRequest">
+        SELECT ft.id, ft.user_id, u.username, u.name AS member_name, u.team_id, t.name AS team_name,
+               ft.shift_group, sg.label AS shift_group_label, sg.start_time AS shift_start_time, sg.end_time AS shift_end_time,
+               ft.start_date, ft.end_date, ft.reason, ft.status, ft.current_approval_step,
+               ft.approver_id, au.name AS approver_name, ft.approved_at, ft.rejected_reason, ft.created_at
+        FROM flex_time_requests ft
+        JOIN users u ON u.id = ft.user_id
+        LEFT JOIN teams t ON t.id = u.team_id
+        LEFT JOIN users au ON au.id = ft.approver_id
+        LEFT JOIN shift_groups sg ON sg.code = ft.shift_group
+        WHERE ft.id = #{id}
+    </select>
+
+    <select id="existsOverlappingFlexTime" resultType="boolean">
+        SELECT EXISTS(
+            SELECT 1 FROM flex_time_requests ft
+            WHERE ft.user_id = #{userId}
+              AND ft.status IN ('PENDING', 'APPROVED')
+              AND ft.start_date &lt;= #{endDate}
+              AND ft.end_date >= #{startDate}
+        )
+    </select>
+
+    <update id="updateFlexTimeStatus">
+        UPDATE flex_time_requests
+        SET status = #{status},
+            current_approval_step = CASE WHEN #{status} = 'PENDING' THEN current_approval_step ELSE NULL END,
+            approver_id = #{approverId},
+            approved_at = CASE WHEN #{status} = 'APPROVED' THEN NOW() ELSE NULL END,
+            rejected_reason = #{rejectedReason}
+        WHERE id = #{id}
+    </update>
+
+    <update id="updateFlexTimeCurrentStep">
+        UPDATE flex_time_requests
+        SET current_approval_step = #{currentApprovalStep}
+        WHERE id = #{id}
+    </update>
+
+    <select id="findApprovedFlexTimeForDate" resultType="FlexTimeRequest">
+        SELECT ft.id, ft.user_id, ft.shift_group, sg.label AS shift_group_label,
+               sg.start_time AS shift_start_time, sg.end_time AS shift_end_time,
+               ft.start_date, ft.end_date,
+               ft.status, ft.current_approval_step,
+               ft.approver_id, ft.approved_at, ft.rejected_reason, ft.created_at
+        FROM flex_time_requests ft
+        LEFT JOIN shift_groups sg ON sg.code = ft.shift_group
+        WHERE ft.status = 'APPROVED'
+          AND ft.user_id = #{userId}
+          AND ft.start_date &lt;= #{workDate}
+          AND ft.end_date >= #{workDate}
+        ORDER BY ft.id DESC
+        LIMIT 1
+    </select>
+
+    <!-- ── 요일별 근무시간표 (attendance_week_schedule, V70) ── -->
+    <select id="findWeekSchedule" resultType="AttendanceWeekDay">
+        SELECT day_of_week, work_type, start_time, end_time
+        FROM attendance_week_schedule
+        ORDER BY day_of_week
+    </select>
+
+    <update id="upsertWeekDay" parameterType="AttendanceWeekDay">
+        INSERT INTO attendance_week_schedule(day_of_week, work_type, start_time, end_time)
+        VALUES(#{dayOfWeek}, #{workType}, #{startTime}, #{endTime})
+        ON DUPLICATE KEY UPDATE work_type = VALUES(work_type),
+            start_time = VALUES(start_time), end_time = VALUES(end_time)
+    </update>
+
+    <!-- ── 시차출근 조 관리 (shift_groups, V69) ── -->
+    <select id="findShiftGroups" resultType="ShiftGroupDef">
+        SELECT id, code, label, start_time, end_time, active, sort_order
+        FROM shift_groups
+        ORDER BY sort_order, id
+    </select>
+
+    <select id="findShiftGroupByCode" resultType="ShiftGroupDef">
+        SELECT id, code, label, start_time, end_time, active, sort_order
+        FROM shift_groups
+        WHERE code = #{code}
+    </select>
+
+    <insert id="insertShiftGroup" parameterType="ShiftGroupDef" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO shift_groups(code, label, start_time, end_time, active, sort_order)
+        VALUES(#{code}, #{label}, #{startTime}, #{endTime}, #{active}, #{sortOrder})
+    </insert>
+
+    <update id="updateShiftGroup" parameterType="ShiftGroupDef">
+        UPDATE shift_groups
+        SET label = #{label}, start_time = #{startTime}, end_time = #{endTime},
+            active = #{active}, sort_order = #{sortOrder}
+        WHERE id = #{id}
+    </update>
+
+</mapper>

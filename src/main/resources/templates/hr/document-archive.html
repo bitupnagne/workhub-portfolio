@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title th:text="${title}">문서 보관함</title>
+  <link rel="icon" type="image/svg+xml" th:href="@{/img/AppLogoMini.svg}">
+  <link rel="stylesheet" th:href="@{/css/worksystem.css}">
+  <!-- 페이지 이동 화면 전환 오류 정리 — 첫 화면 그리기 전에 실행돼야 해서 head 에 둔다 -->
+  <script th:src="@{/js/worksystem-view-transition.js}"></script>
+</head>
+<body>
+<div class="app">
+  <div th:replace="~{fragments/app :: sidebar}"></div>
+  <main>
+    <div th:replace="~{fragments/app :: topbar}"></div>
+    <div class="content document-page" data-ws-query-contract="hr-document-archive-v1" data-ws-query-path="self" data-ws-query-params="box q type page" data-ws-query-context="default">
+      <div class="banner ok" th:if="${message}" th:text="${message}"></div>
+      <div class="banner err" th:if="${error}" th:text="${error}"></div>
+
+      <nav class="document-tabs ws-segmented" aria-label="문서 보관함 필터" data-ws-query-state="box-tabs">
+        <a th:each="box : ${documentBoxes}"
+           th:href="@{/hr/documents(box=${box.key},q=${query},type=${typeFilter})}"
+           th:classappend="${box.key == documentBox} ? 'active'"
+           th:attr="aria-current=${box.key == documentBox ? 'page' : null}"
+           th:text="${box.label}">결재 대기 문서</a>
+      </nav>
+
+      <form class="filter-panel" method="get" th:action="@{/hr/documents}" data-ws-query-filter="filter-0">
+        <input type="hidden" name="box" th:value="${documentBox}">
+        <input class="mini-input" type="text" name="q" th:value="${query}"
+               placeholder="신청자 / 제목 / 소속 검색" aria-label="문서 검색">
+        <select class="mini-input" name="type" aria-label="문서 구분 필터">
+          <option value="ALL" th:selected="${typeFilter == null or typeFilter == ''}">전체 구분</option>
+          <option th:each="dt : ${documentTypes}" th:value="${dt.name()}"
+                  th:selected="${typeFilter == dt.name()}" th:text="${dt.label}">연차</option>
+        </select>
+        <a class="btn" th:href="@{/hr/documents(box=${documentBox})}" data-ws-query-reset="">초기화</a>
+      </form>
+
+      <section class="section-block" data-ws-query-region="documents">
+        <div class="section-header no-caret">
+          <div class="section-left">
+            <span class="sdot sdot-new"></span>
+            <span class="sname" th:text="${documentBoxTitle}">결재 대기 문서</span>
+            <span class="scnt scnt-new" th:text="${#lists.size(items)}">0</span>
+          </div>
+        </div>
+        <div class="table-scroll">
+          <table class="rt board-table document-table">
+            <thead>
+            <tr>
+              <th>#</th>
+              <th>구분</th>
+              <th>신청자</th>
+              <th>소속</th>
+              <th>제목</th>
+              <th>기간</th>
+              <th>단계</th>
+              <th>수신 부서</th>
+              <th>첨부</th>
+              <th>상태</th>
+              <th>처리</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr class="empty-tr" th:if="${#lists.isEmpty(items)}"><td colspan="11" th:text="|${documentBoxTitle}가 없습니다.|">문서가 없습니다.</td></tr>
+            <tr class="mr" th:each="item, stat : ${items}"
+                th:with="baseUrl=${(item.documentType.name() == 'LEAVE' or item.documentType.name() == 'LEAVE_CANCEL') ? '/hr/leave/' + item.documentId
+                            : (item.documentType.name() == 'TRIP' ? '/hr/trips/' + item.documentId
+                            : (item.documentType.name() == 'TRIP_REPORT' ? '/hr/trips/report/' + item.documentId
+                            : (item.documentType.name() == 'FLEX_TIME' ? '/hr/flex-time/' + item.documentId
+                            : (item.documentType.name() == 'LOA' ? '/hr/loa/' + item.documentId
+                            : (item.documentType.name() == 'OUTSIDE_WORK' ? '/hr/outside-work/' + item.documentId
+                            : (item.documentType.name() == 'OVERTIME' ? '/hr/overtime/' + item.documentId
+                            : '/hr/attendance/correction/' + item.documentId))))))},
+                          docUrl=${baseUrl + '/document'}">
+              <td th:text="${stat.count}">1</td>
+              <td><span class="cycle-badge" th:text="${item.documentType.label}">연차</span></td>
+              <td th:text="${item.requesterName}">신청자</td>
+              <td th:text="${item.teamName ?: '-'}">소속</td>
+              <td>
+                <a class="doc-link" th:href="@{${docUrl}}" data-doc-popup target="_blank" rel="noopener" th:text="${item.title}">제목</a>
+                <!-- [B2] 휴가 건 판단 정보 — 신청자 잔여 연차·기간 팀 부재 -->
+                <div class="muted doc-judge-info"
+                     th:if="${leaveJudgeInfo != null and leaveJudgeInfo.containsKey(item.documentId) and item.documentType.name() == 'LEAVE'}"
+                     th:text="${leaveJudgeInfo.get(item.documentId)}">잔여 15일</div>
+              </td>
+              <td><span class="date-mono" th:text="|${item.startDate} ~ ${item.endDate}|">2026-05-01 ~ 2026-05-01</span></td>
+              <td>
+                <span th:if="${item.stepOrder != null}" th:text="|${item.stepOrder}차 결재|">1차 결재</span>
+                <span class="muted" th:unless="${item.stepOrder != null}">-</span>
+              </td>
+              <td>
+                <span th:text="${item.receiverTeamName ?: '-'}">수신 부서</span>
+              </td>
+              <td>
+                <button class="rbtn acc" th:if="${item.receiptId != null}" type="button"
+                        th:data-receipt-url="@{/hr/trips/receipts/{id}(id=${item.receiptId})}"
+                        th:data-receipt-name="${item.receiptOriginalFilename}">보기</button>
+                <span class="muted" th:unless="${item.receiptId != null}">-</span>
+              </td>
+              <td>
+                <span class="status-pill" th:classappend="${item.status == 'REJECTED' or item.status == 'CANCELED'} ? ' danger' : (${item.status == 'APPROVED'} ? ' ok' : '')"
+                      th:switch="${item.status}">
+                  <span th:case="'PENDING'">진행중</span>
+                  <span th:case="'APPROVED'">완료</span>
+                  <span th:case="'REJECTED'">반려</span>
+                  <span th:case="'CANCELED'">취소</span>
+                  <span th:case="*" th:text="${item.status}">상태</span>
+                </span>
+              </td>
+              <td>
+                <div class="act-wrap" th:if="${documentBox == 'pending'}"
+                     th:with="mine=${item.approverUserId == currentUser.userId or item.delegateUserId == currentUser.userId}">
+                  <a class="rbtn acc" th:href="@{${docUrl}}" data-doc-popup target="_blank" rel="noopener">문서 열기</a>
+                  <!-- [B2] 인라인 승인/반려 — 문서 팝업 없이 행에서 처리(비밀번호·반려사유는 공용 결재 모달) -->
+                  <form th:if="${mine}" th:action="@{|${baseUrl}/approve|}" method="post"
+                        data-approval-confirm-form data-approval-action="승인" data-approval-needs-reason="false">
+                    <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                    <input type="hidden" name="back" value="/hr/documents?box=pending">
+                    <button class="rbtn acc" type="submit">승인</button>
+                  </form>
+                  <form th:if="${mine}" th:action="@{|${baseUrl}/reject|}" method="post"
+                        data-approval-confirm-form data-approval-action="반려" data-approval-needs-reason="true">
+                    <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                    <input type="hidden" name="back" value="/hr/documents?box=pending">
+                    <button class="rbtn del" type="submit">반려</button>
+                  </form>
+                </div>
+                <span class="act-wrap" th:unless="${documentBox == 'pending'}">
+                  <a class="rbtn acc" th:href="@{${docUrl}}" data-doc-popup target="_blank" rel="noopener">문서 열기</a>
+                  <form th:if="${documentBox == 'after'}"
+                        th:action="@{/hr/documents/{type}/{id}/post-approve(type=${item.documentType.name()},id=${item.documentId})}"
+                        method="post"
+                        data-approval-confirm-form data-approval-action="후결" data-approval-needs-reason="false">
+                    <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                    <input type="hidden" name="back" value="/hr/documents?box=after">
+                    <button class="rbtn acc" type="submit">후결</button>
+                  </form>
+                  <form th:if="${documentBox == 'requested'}" th:action="@{|${baseUrl}/cancel|}" method="post"
+                        data-confirm-message="이 결재 요청을 회수하시겠습니까?"
+                        data-confirm-ok="회수" data-confirm-danger="true">
+                    <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                    <input type="hidden" name="back" value="/hr/documents?box=requested">
+                    <button class="rbtn del" type="submit">회수</button>
+                  </form>
+                </span>
+              </td>
+            </tr>
+            </tbody>
+          </table>
+        </div>
+        <div th:replace="~{fragments/app :: pagination(${pageInfo}, ${pageBaseUrl})}"></div>
+      </section>
+    </div>
+  </main>
+</div>
+</body>
+</html>

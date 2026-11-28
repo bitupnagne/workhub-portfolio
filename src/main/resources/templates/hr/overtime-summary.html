@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title th:text="${title}">시간외 근무 집계</title>
+  <link rel="icon" type="image/svg+xml" th:href="@{/img/AppLogoMini.svg}">
+  <link rel="stylesheet" th:href="@{/css/worksystem.css}">
+  <!-- 페이지 이동 화면 전환 오류 정리 — 첫 화면 그리기 전에 실행돼야 해서 head 에 둔다 -->
+  <script th:src="@{/js/worksystem-view-transition.js}"></script>
+</head>
+<body>
+<div class="app">
+  <div th:replace="~{fragments/app :: sidebar}"></div>
+  <main>
+    <div th:replace="~{fragments/app :: topbar}"></div>
+    <div class="content admin-page" data-ws-query-contract="hr-overtime-summary-v1" data-ws-query-path="self" data-ws-query-params="month" data-ws-query-context="default">
+      <div class="banner ok" th:if="${message}" th:text="${message}"></div>
+      <div class="banner err" th:if="${error}" th:text="${error}"></div>
+      <div data-ws-query-state="wage-warning">
+        <div class="banner err" th:if="${missingWage}">
+          통상시급이 정해지지 않은 직급이 있어 일부 직원의 수당을 계산하지 못했습니다. 급여 관리에서 직급별 통상시급을 넣으면 금액이 나옵니다.
+        </div>
+      </div>
+
+      <section class="section-block">
+        <div class="section-header no-caret">
+          <div class="section-left">
+            <span class="sdot sdot-new"></span>
+            <span class="sname">시간외 근무 집계</span>
+            <span class="scnt scnt-new" th:text="${#lists.size(rows)}" data-ws-query-state="row-count">0</span>
+            <span class="muted" data-ws-query-state="total-amount" th:if="${showAmounts}"
+                  th:text="|수당 합계 ${#numbers.formatInteger(totalAmount, 1, 'COMMA')}원|">수당 합계 0원</span>
+          </div>
+          <div class="section-actions" data-ws-query-state="month-nav">
+            <a class="rbtn" th:href="@{/hr/overtime/summary(month=${monthPrev})}" aria-label="이전 달"><svg th:replace="~{fragments/icons :: i('chevron_left')}"></svg></a>
+            <strong th:text="${overtimeMonthLabel}">2026년 11월</strong>
+            <a class="rbtn" th:href="@{/hr/overtime/summary(month=${monthNext})}" aria-label="다음 달"><svg th:replace="~{fragments/icons :: i('chevron_right')}"></svg></a>
+            <a class="rbtn" th:href="@{/hr/overtime(month=${overtimeMonth})}">신청 목록</a>
+            <a class="rbtn acc" th:href="@{/hr/overtime/summary/csv(month=${overtimeMonth})}" download>CSV</a>
+          </div>
+        </div>
+        <div data-ws-query-region="summary-rows">
+        <div class="table-scroll">
+          <table class="rt board-table">
+            <thead>
+            <tr>
+              <th>팀</th><th>이름</th><th>조</th><th>승인</th><th>인정 시간</th><th>기준 내</th><th>연장</th>
+              <th>포괄 차감</th><th>휴일</th><th>휴일 초과</th><th>야간</th><th>환산 시간</th><th th:if="${showAmounts}">통상시급</th><th th:if="${showAmounts}">수당</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr class="empty-tr" th:if="${#lists.isEmpty(rows)}"><td th:attr="colspan=${showAmounts ? 14 : 12}">이 달에 승인된 시간외 근무가 없습니다.</td></tr>
+            <tr th:each="row : ${rows}">
+              <td th:text="${row.teamName ?: '-'}">팀</td>
+              <td th:text="${row.memberName}">이름</td>
+              <td th:text="${row.groupLabel}">기본 근무</td>
+              <td th:text="|${row.requestCount}건|">1건</td>
+              <td th:text="${row.text(row.recognizedMinutes)}">3시간</td>
+              <td th:text="${row.text(row.withinStandardMinutes)}">0분</td>
+              <td th:text="${row.text(row.extendedMinutes)}">3시간</td>
+              <td th:text="${row.text(row.inclusiveDeductedMinutes)}">0분</td>
+              <td th:text="${row.text(row.holidayMinutes)}">0분</td>
+              <td th:text="${row.text(row.holidayOverMinutes)}">0분</td>
+              <td th:text="${row.text(row.nightMinutes)}">0분</td>
+              <td th:text="|${row.weightedHours}시간|">4.5시간</td>
+              <td th:if="${showAmounts}" th:text="${row.hourlyWage == null} ? '통상시급 미설정' : |${#numbers.formatInteger(row.hourlyWage, 1, 'COMMA')}원|">15,000원</td>
+              <td th:if="${showAmounts}" th:text="${row.amount == null} ? '-' : |${#numbers.formatInteger(row.amount, 1, 'COMMA')}원|">67,500원</td>
+            </tr>
+            </tbody>
+          </table>
+        </div>
+        </div>
+      </section>
+
+      <div data-ws-query-region="summary-details">
+      <section class="section-block" th:each="row : ${rows}">
+        <div class="section-header no-caret">
+          <div class="section-left">
+            <span class="sdot sdot-done"></span>
+            <span class="sname" th:text="|${row.memberName} 인정 내역|">이름 인정 내역</span>
+            <span class="scnt" th:text="${#lists.size(row.details)}">0</span>
+          </div>
+        </div>
+        <div class="table-scroll">
+          <table class="rt board-table">
+            <thead>
+            <tr><th>근무일</th><th>구분</th><th>신청 시간</th><th>인정 시간</th><th>야간</th><th>판정 근거</th><th>문서</th></tr>
+            </thead>
+            <tbody>
+            <tr th:each="d : ${row.details}">
+              <td th:text="${d.request.workDate}">2026-11-23</td>
+              <td th:text="${d.request.dayType.label}">평일</td>
+              <td th:text="|${d.request.timeText} (${d.request.durationText})|">18:00 ~ 21:00 (3시간)</td>
+              <td th:text="${d.recognizedText}">2시간 30분</td>
+              <td th:text="${row.text(d.line.nightMinutes)}">0분</td>
+              <td class="muted" th:text="${d.line.basis}">기록과 겹친 시간만 인정</td>
+              <td><a class="rbtn" th:href="@{/hr/overtime/{id}/document(id=${d.request.id})}">문서</a></td>
+            </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+      </div>
+
+      <p class="muted" data-ws-query-state="basis-note"
+         th:text="|인정 시간은 승인된 신청과 실제 출퇴근 기록이 겹치는 시간입니다. 그날 출퇴근 기록이 하나도 없으면 신청 시간을 그대로 인정합니다. 환산 시간 = 기준 내×1 + 연장×${overtimeSetting.rateExtended} + 휴일×가산율 + 휴일 초과×${overtimeSetting.rateHolidayOver} + 야간×${overtimeSetting.rateNight}, 포괄 인정분은 연장에서 뺍니다. 통상시급은 급여 관리의 직급별 값(근무일 기준)이고, 수당 금액은 급여 관리 권한자에게만 보입니다.|">산정 기준</p>
+    </div>
+  </main>
+</div>
+</body>
+</html>

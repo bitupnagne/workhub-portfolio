@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title th:text="${title}">출장 보고서</title>
+  <link rel="icon" type="image/svg+xml" th:href="@{/img/AppLogoMini.svg}">
+  <link rel="stylesheet" th:href="@{/css/worksystem.css}">
+  <!-- 페이지 이동 화면 전환 오류 정리 — 첫 화면 그리기 전에 실행돼야 해서 head 에 둔다 -->
+  <script th:src="@{/js/worksystem-view-transition.js}"></script>
+</head>
+<body class="document-popup-body">
+  <main class="document-popup">
+      <div class="banner ok" th:if="${message}" th:text="${message}"></div>
+      <div class="banner err" th:if="${error}" th:text="${error}"></div>
+      <div class="action-bar no-print">
+        <button class="rbtn" type="button" onclick="window.close(); setTimeout(function(){ if (!window.closed) history.back(); }, 150);">닫기</button>
+        <button class="btn primary" type="button" onclick="window.print()">PDF 저장 / 인쇄</button>
+      </div>
+
+      <div class="no-print doc-approve-box" th:if="${actionable}">
+        <div class="dab-title">결재 처리</div>
+        <p class="dab-help">승인 또는 반려 버튼을 누르면 로그인 비밀번호 확인 창이 열립니다.</p>
+        <div class="dab-actions">
+          <form class="dab-form" th:action="@{|/hr/trips/report/${report.id}/approve|}" method="post"
+                data-approval-confirm-form data-approval-action="승인" data-approval-needs-reason="false">
+            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+            <button class="btn primary" type="submit">승인</button>
+          </form>
+          <form class="dab-form" th:action="@{|/hr/trips/report/${report.id}/reject|}" method="post"
+                data-approval-confirm-form data-approval-action="반려" data-approval-needs-reason="true">
+            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+            <button class="btn danger" type="submit">반려</button>
+          </form>
+        </div>
+      </div>
+
+      <div class="print-page approval-doc">
+        <div class="doc-stamp-zone">
+          <div th:replace="~{fragments/approval :: stamp(${steps}, ${stepSignatures}, 'doc', ${applicantName}, ${applicantSignature}, ${createdAt})}"></div>
+        </div>
+
+        <h1 class="doc-title">출장 보고서</h1>
+
+        <table class="doc-table">
+          <tbody>
+          <tr><th>보고자</th><td th:text="${report.memberName}">홍길동</td><th>소속</th><td th:text="${report.teamName ?: '-'}">팀</td></tr>
+          <tr><th>출장지</th><td th:text="${report.destination}">부산지사</td><th>상태</th><td th:text="${report.status != null ? report.status.label : '-'}">승인</td></tr>
+          <tr><th>출장 기간</th><td th:text="|${report.tripStartDate} ~ ${report.tripEndDate}|">기간</td><th>보고일</th><td th:text="${createdAt}">일자</td></tr>
+          <tr><th>출장 목적</th><td colspan="3" th:text="${report.purpose ?: '-'}">목적</td></tr>
+          <tr><th>출장 내용</th><td colspan="3" style="white-space:pre-wrap;" th:text="${report.content}">내용</td></tr>
+          <tr th:if="${report.rejectedReason}"><th>반려 사유</th><td colspan="3" th:text="${report.rejectedReason}">반려 사유</td></tr>
+          </tbody>
+        </table>
+
+        <!-- [UX47] 경비 — 변동 시 신청/보고 금액을 나란히 비교 -->
+        <h2 class="sub-section-title" th:text="${report.expenseChanged} ? '경비 정산 (신청 대비 변동)' : '경비 정산 (신청 시와 동일)'">경비 정산</h2>
+        <table class="doc-table" th:with="changed=${report.expenseChanged}">
+          <thead>
+            <tr th:if="${changed}"><th>항목</th><th>내용</th><th>신청 당시 금액</th><th>보고 금액</th><th>비고</th></tr>
+            <tr th:unless="${changed}"><th>항목</th><th>내용</th><th>금액</th><th>비고</th></tr>
+          </thead>
+          <tbody th:if="${changed}">
+            <tr th:each="e, st : ${reportExpenses}">
+              <td th:text="${e.expenseType.label}">교통비</td>
+              <td th:text="${e.description ?: '-'}">내용</td>
+              <td th:with="orig=${st.index < #lists.size(tripExpenses) ? tripExpenses[st.index] : null}"
+                  th:text="${orig != null ? #numbers.formatInteger(orig.amount, 0, 'COMMA') + '원' : '-'}">0원</td>
+              <td><b th:text="${#numbers.formatInteger(e.amount, 0, 'COMMA')} + '원'">0원</b></td>
+              <td th:text="${e.note ?: '-'}">비고</td>
+            </tr>
+            <tr th:if="${#lists.isEmpty(reportExpenses)}"><td colspan="5">경비 내역 없음</td></tr>
+          </tbody>
+          <tbody th:unless="${changed}">
+            <tr th:each="e : ${reportExpenses}">
+              <td th:text="${e.expenseType.label}">교통비</td>
+              <td th:text="${e.description ?: '-'}">내용</td>
+              <td th:text="${#numbers.formatInteger(e.amount, 0, 'COMMA')} + '원'">0원</td>
+              <td th:text="${e.note ?: '-'}">비고</td>
+            </tr>
+            <tr th:if="${#lists.isEmpty(reportExpenses)}"><td colspan="4">경비 내역 없음</td></tr>
+          </tbody>
+        </table>
+
+        <!-- 첨부(영수증 등) -->
+        <h2 class="sub-section-title">첨부 파일</h2>
+        <table class="doc-table">
+          <tbody>
+          <tr th:if="${#lists.isEmpty(reportFiles)}"><td>첨부 파일 없음</td></tr>
+          <tr th:each="f : ${reportFiles}">
+            <td>
+              <a class="rbtn acc no-print" th:href="@{|/hr/trips/report/files/${f.id}|}" target="_blank" rel="noopener" th:text="${f.originalFilename}">파일</a>
+              <span class="print-only" th:text="${f.originalFilename}">파일</span>
+              <span class="muted" th:text="|(${#numbers.formatInteger(f.fileSize / 1024, 0, 'COMMA')} KB)|">(크기)</span>
+            </td>
+          </tr>
+          </tbody>
+        </table>
+
+        <div class="doc-foot">
+          <div class="doc-date-footer"
+               th:text="${createdAt != null} ? ${#temporals.format(createdAt, 'yyyy년 MM월 dd일')} : '-'">2026년 05월 17일</div>
+          <div th:replace="~{fragments/approval :: applicantSign(${applicantName}, ${applicantSignature}, ${createdAt})}"></div>
+        </div>
+      </div>
+  </main>
+  <script th:src="@{/js/worksystem-icons.js}"></script>
+  <script th:src="@{/js/worksystem-modal.js}"></script>
+  <script th:src="@{/js/worksystem-approval-confirm.js}"></script>
+</body>
+</html>

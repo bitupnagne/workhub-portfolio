@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.portfolio.worksystem.mapper.PersonnelTransferMapper">
+
+    <resultMap id="PtMap" type="PersonnelTransfer">
+        <id property="id" column="id"/>
+        <result property="userId" column="user_id"/>
+        <result property="fromTeamId" column="from_team_id"/>
+        <result property="toTeamId" column="to_team_id"/>
+        <result property="effectiveDate" column="effective_date"/>
+        <result property="transferYear" column="transfer_year"/>
+        <result property="applied" column="applied"/>
+        <result property="appliedAt" column="applied_at"/>
+        <result property="createdBy" column="created_by"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+        <result property="userName" column="user_name"/>
+        <result property="fromTeamName" column="from_team_name"/>
+        <result property="toTeamName" column="to_team_name"/>
+        <result property="createdByName" column="created_by_name"/>
+    </resultMap>
+
+    <sql id="PtSelect">
+        SELECT p.*, u.name AS user_name, ft.name AS from_team_name, tt.name AS to_team_name, cu.name AS created_by_name
+        FROM personnel_transfers p
+        LEFT JOIN users u ON u.id = p.user_id
+        LEFT JOIN teams ft ON ft.id = p.from_team_id
+        LEFT JOIN teams tt ON tt.id = p.to_team_id
+        LEFT JOIN users cu ON cu.id = p.created_by
+    </sql>
+
+    <insert id="insert" parameterType="PersonnelTransfer" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO personnel_transfers(user_id, from_team_id, to_team_id, effective_date, transfer_year, applied, applied_at, created_by)
+        VALUES(#{userId}, #{fromTeamId}, #{toTeamId}, #{effectiveDate}, #{transferYear}, #{applied},
+               CASE WHEN #{applied} THEN NOW() ELSE NULL END, #{createdBy})
+    </insert>
+
+    <select id="findById" resultMap="PtMap">
+        <include refid="PtSelect"/> WHERE p.id = #{id}
+    </select>
+
+    <select id="findByYear" resultMap="PtMap">
+        <include refid="PtSelect"/> WHERE p.transfer_year = #{year} ORDER BY p.effective_date DESC, p.id DESC
+    </select>
+
+    <!-- [B5] 인사카드 발령 이력 -->
+    <select id="findByUser" resultMap="PtMap">
+        <include refid="PtSelect"/> WHERE p.user_id = #{userId} ORDER BY p.effective_date DESC, p.id DESC
+    </select>
+
+    <select id="findAppliedByUserYear" resultMap="PtMap">
+        <include refid="PtSelect"/>
+        WHERE p.user_id = #{userId} AND p.transfer_year = #{year} AND p.applied = TRUE
+        ORDER BY p.effective_date ASC, p.id ASC
+    </select>
+
+    <select id="findDuePending" resultMap="PtMap">
+        <include refid="PtSelect"/>
+        WHERE p.applied = FALSE AND p.effective_date &lt;= #{today}
+        ORDER BY p.effective_date ASC, p.id ASC
+    </select>
+
+    <update id="markApplied">
+        UPDATE personnel_transfers SET applied = TRUE, applied_at = NOW() WHERE id = #{id}
+    </update>
+
+    <update id="updateEffectiveDate">
+        UPDATE personnel_transfers SET effective_date = #{effectiveDate}, transfer_year = #{transferYear}, updated_at = NOW()
+        WHERE id = #{id}
+    </update>
+
+    <delete id="delete">
+        DELETE FROM personnel_transfers WHERE id = #{id}
+    </delete>
+</mapper>

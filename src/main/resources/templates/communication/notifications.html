@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title th:text="${title}">알림</title>
+  <link rel="icon" type="image/svg+xml" th:href="@{/img/AppLogoMini.svg}">
+  <link rel="stylesheet" th:href="@{/css/worksystem.css}">
+  <!-- 페이지 이동 화면 전환 오류 정리 — 첫 화면 그리기 전에 실행돼야 해서 head 에 둔다 -->
+  <script th:src="@{/js/worksystem-view-transition.js}"></script>
+</head>
+<body>
+<div class="app">
+  <div th:replace="~{fragments/app :: sidebar}"></div>
+  <main>
+    <div th:replace="~{fragments/app :: topbar}"></div>
+    <div class="content admin-page" data-ws-query-contract="communication-notifications-v1" data-ws-query-path="self" data-ws-query-params="q status page" data-ws-query-context="default">
+      <div class="banner ok" th:if="${message}" th:text="${message}"></div>
+      <div class="banner err" th:if="${error}" th:text="${error}"></div>
+      <div class="action-bar">
+        <form th:action="@{/notifications/read-all}" method="post">
+          <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+          <button class="btn" type="submit">모두 읽음</button>
+        </form>
+      </div>
+      <section class="section-block">
+        <div class="section-header no-caret">
+          <div class="section-left"><span class="sdot sdot-done"></span><span class="sname">알림 검색</span></div>
+        </div>
+        <form class="admin-filter-bar" th:action="@{/notifications}" method="get" data-ws-query-filter="filter-0">
+          <input class="admin-search-input" name="q" th:value="${query}" placeholder="제목, 내용, 보낸 사람 검색">
+          <select name="status" aria-label="읽음 상태">
+            <option value="all" th:selected="${statusFilter == 'all'}">전체 상태</option>
+            <option value="unread" th:selected="${statusFilter == 'unread'}">안읽음</option>
+            <option value="read" th:selected="${statusFilter == 'read'}">읽음</option>
+          </select>
+          <a class="btn" th:href="@{/notifications}" data-ws-query-reset="">초기화</a>
+        </form>
+      </section>
+      <section class="section-block" th:with="newNotifications=${notifications.?[unread]}, readNotifications=${notifications.?[!unread]}" data-ws-query-region="results">
+        <div class="section-header no-caret">
+          <div class="section-left"><span class="sdot sdot-new"></span><span class="sname">새로운 알림</span><span class="scnt scnt-new" th:text="${#lists.size(newNotifications)}">0</span></div>
+        </div>
+        <div class="notice-list">
+          <div class="empty-search" th:if="${#lists.isEmpty(notifications)}">알림이 없습니다</div>
+          <div class="empty-search" th:if="${!#lists.isEmpty(notifications) and #lists.isEmpty(newNotifications)}">새로운 알림이 없습니다</div>
+          <article class="notice-item unread" th:each="n : ${newNotifications}">
+            <div class="notice-main">
+              <div class="notice-title" th:text="${n.title}">알림 제목</div>
+              <div class="notice-body" th:text="${n.plainBody}">알림 내용</div>
+              <div class="notice-meta"><span th:text="${n.senderName != null ? n.senderName : '시스템'}">보낸 사람</span><span th:text="${n.createdAt}">시간</span></div>
+            </div>
+            <div class="act-wrap">
+              <a class="go-btn" th:if="${n.linkUrl != null}" th:href="${n.linkUrl}">열기</a>
+              <form th:if="${n.unread}" th:action="@{|/notifications/${n.id}/read|}" method="post">
+                <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                <button class="rbtn" type="submit">읽음</button>
+              </form>
+              <form th:action="@{|/notifications/${n.id}/delete|}" method="post">
+                <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                <input type="hidden" name="back" th:value="${'/notifications?q=' + query + '&status=' + statusFilter + '&page=' + pageInfo.page}">
+                <button class="rbtn del" type="submit">삭제</button>
+              </form>
+            </div>
+          </article>
+        </div>
+        <div class="section-header no-caret notification-read-header" th:if="${!#lists.isEmpty(readNotifications)}">
+          <div class="section-left"><span class="sdot sdot-done"></span><span class="sname">읽은 알림</span><span class="scnt scnt-done" th:text="${#lists.size(readNotifications)}">0</span></div>
+        </div>
+        <div class="notice-list" th:if="${!#lists.isEmpty(readNotifications)}">
+          <article class="notice-item" th:each="n : ${readNotifications}">
+            <div class="notice-main">
+              <div class="notice-title" th:text="${n.title}">알림 제목</div>
+              <div class="notice-body" th:text="${n.plainBody}">알림 내용</div>
+              <div class="notice-meta"><span th:text="${n.senderName != null ? n.senderName : '시스템'}">보낸 사람</span><span th:text="${n.createdAt}">시간</span></div>
+            </div>
+            <div class="act-wrap">
+              <a class="go-btn" th:if="${n.linkUrl != null}" th:href="${n.linkUrl}">열기</a>
+              <form th:action="@{|/notifications/${n.id}/delete|}" method="post">
+                <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                <input type="hidden" name="back" th:value="${'/notifications?q=' + query + '&status=' + statusFilter + '&page=' + pageInfo.page}">
+                <button class="rbtn del" type="submit">삭제</button>
+              </form>
+            </div>
+          </article>
+        </div>
+        <div th:replace="~{fragments/app :: pagination(${pageInfo}, ${pageBaseUrl})}"></div>
+      </section>
+    </div>
+  </main>
+</div>
+</body>
+</html>

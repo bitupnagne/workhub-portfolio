@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.portfolio.worksystem.mapper.AppReleaseMapper">
+
+    <insert id="insert" parameterType="AppRelease" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO app_releases(version, file_name, stored_file_name, sha256, file_size, mandatory,
+                                 patch_base_version, patch_file_name, patch_stored_file_name, patch_sha256, patch_file_size,
+                                 release_note, created_by)
+        VALUES(#{version}, #{fileName}, #{storedFileName}, #{sha256}, #{fileSize}, #{mandatory},
+               #{patchBaseVersion}, #{patchFileName}, #{patchStoredFileName}, #{patchSha256}, #{patchFileSize},
+               #{releaseNote}, #{createdBy})
+    </insert>
+
+    <update id="updatePackageInfo">
+        UPDATE app_releases
+        SET patch_base_version = #{patchBaseVersion},
+            patch_file_name = #{patchFileName},
+            patch_stored_file_name = #{patchStoredFileName},
+            patch_sha256 = #{patchSha256},
+            patch_file_size = #{patchFileSize}
+        WHERE version = #{version}
+    </update>
+
+    <insert id="insertPatch" parameterType="AppReleasePatch">
+        INSERT INTO app_release_patches(release_id, base_version, file_name, stored_file_name, sha256, file_size)
+        VALUES(#{releaseId}, #{baseVersion}, #{fileName}, #{storedFileName}, #{sha256}, #{fileSize})
+        ON DUPLICATE KEY UPDATE
+            file_name = VALUES(file_name),
+            stored_file_name = VALUES(stored_file_name),
+            sha256 = VALUES(sha256),
+            file_size = VALUES(file_size)
+    </insert>
+
+    <select id="findPatchesByReleaseId" resultType="AppReleasePatch">
+        SELECT p.id, p.release_id, p.base_version, p.file_name, p.stored_file_name, p.sha256, p.file_size, p.created_at
+        FROM app_release_patches p
+        WHERE p.release_id = #{releaseId}
+        ORDER BY p.base_version
+    </select>
+
+    <select id="findPatchByReleaseVersionAndBaseVersion" resultType="AppReleasePatch">
+        SELECT p.id, p.release_id, p.base_version, p.file_name, p.stored_file_name, p.sha256, p.file_size, p.created_at
+        FROM app_release_patches p
+        JOIN app_releases r ON r.id = p.release_id
+        WHERE r.version = #{version}
+          AND p.base_version = #{baseVersion}
+    </select>
+
+    <select id="findAll" resultType="AppRelease">
+        SELECT r.id, r.version, r.file_name, r.stored_file_name, r.sha256, r.file_size,
+               r.mandatory, r.patch_base_version, r.patch_file_name, r.patch_stored_file_name, r.patch_sha256, r.patch_file_size,
+               r.release_note, r.active, r.created_by, u.name AS created_by_name,
+               r.created_at, r.updated_at
+        FROM app_releases r
+        LEFT JOIN users u ON u.id = r.created_by
+        ORDER BY r.created_at DESC, r.id DESC
+    </select>
+
+    <select id="findActive" resultType="AppRelease">
+        SELECT r.id, r.version, r.file_name, r.stored_file_name, r.sha256, r.file_size,
+               r.mandatory, r.patch_base_version, r.patch_file_name, r.patch_stored_file_name, r.patch_sha256, r.patch_file_size,
+               r.release_note, r.active, r.created_by, u.name AS created_by_name,
+               r.created_at, r.updated_at
+        FROM app_releases r
+        LEFT JOIN users u ON u.id = r.created_by
+        WHERE r.active = TRUE
+        ORDER BY r.created_at DESC, r.id DESC
+    </select>
+
+    <select id="findByVersion" resultType="AppRelease">
+        SELECT r.id, r.version, r.file_name, r.stored_file_name, r.sha256, r.file_size,
+               r.mandatory, r.patch_base_version, r.patch_file_name, r.patch_stored_file_name, r.patch_sha256, r.patch_file_size,
+               r.release_note, r.active, r.created_by, u.name AS created_by_name,
+               r.created_at, r.updated_at
+        FROM app_releases r
+        LEFT JOIN users u ON u.id = r.created_by
+        WHERE r.version = #{version}
+    </select>
+
+    <select id="findById" resultType="AppRelease">
+        SELECT r.id, r.version, r.file_name, r.stored_file_name, r.sha256, r.file_size,
+               r.mandatory, r.patch_base_version, r.patch_file_name, r.patch_stored_file_name, r.patch_sha256, r.patch_file_size,
+               r.release_note, r.active, r.created_by, u.name AS created_by_name,
+               r.created_at, r.updated_at
+        FROM app_releases r
+        LEFT JOIN users u ON u.id = r.created_by
+        WHERE r.id = #{id}
+    </select>
+
+    <update id="deactivate">
+        UPDATE app_releases
+        SET active = FALSE
+        WHERE id = #{id}
+    </update>
+
+    <update id="activate">
+        UPDATE app_releases
+        SET active = TRUE
+        WHERE id = #{id}
+    </update>
+</mapper>

@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.portfolio.worksystem.mapper.UserChangeLogMapper">
+
+    <insert id="insert" parameterType="UserChangeLog" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO user_change_logs(user_id, field, field_label, old_value, new_value, source, changed_by)
+        VALUES(#{userId}, #{field}, #{fieldLabel}, #{oldValue}, #{newValue}, #{source}, #{changedBy})
+    </insert>
+
+    <select id="findByUser" resultType="UserChangeLog">
+        SELECT l.id, l.user_id, l.field, l.field_label, l.old_value, l.new_value,
+               l.source, l.changed_by, actor.name AS changed_by_name, l.changed_at
+        FROM user_change_logs l
+        LEFT JOIN users actor ON actor.id = l.changed_by
+        WHERE l.user_id = #{userId}
+        ORDER BY l.changed_at DESC, l.id DESC
+        LIMIT #{limit}
+    </select>
+
+    <select id="countByUser" resultType="int">
+        SELECT COUNT(*) FROM user_change_logs WHERE user_id = #{userId}
+    </select>
+</mapper>

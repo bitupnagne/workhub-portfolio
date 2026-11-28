@@ -1,0 +1,50 @@
+services:
+  db:
+    image: mariadb:11.4
+    container_name: workhub-db
+    restart: unless-stopped
+    environment:
+      MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD:?copy .env.example to .env and set MARIADB_ROOT_PASSWORD}
+      MARIADB_DATABASE: ${DB_NAME:?copy .env.example to .env and set DB_NAME}
+      MARIADB_USER: ${DB_USER:?copy .env.example to .env and set DB_USER}
+      MARIADB_PASSWORD: ${DB_PASSWORD:?copy .env.example to .env and set DB_PASSWORD}
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    ports:
+      - "13307:3306"
+    volumes:
+      - db-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  app:
+    image: workhub:local
+    build:
+      context: .
+    container_name: workhub
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_URL: "jdbc:mariadb://db:3306/${DB_NAME:?copy .env.example to .env and set DB_NAME}?characterEncoding=UTF-8&serverTimezone=Asia/Seoul&useSSL=false&allowPublicKeyRetrieval=true"
+      DB_USER: ${DB_USER:?copy .env.example to .env and set DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD:?copy .env.example to .env and set DB_PASSWORD}
+      DEPLOY_SYSTEM_URL: ${DEPLOY_SYSTEM_URL:?copy .env.example to .env and set DEPLOY_SYSTEM_URL}
+      DEPLOY_SSO_SHARED_SECRET: ${DEPLOY_SSO_SHARED_SECRET:?copy .env.example to .env and set DEPLOY_SSO_SHARED_SECRET}
+      ANONYMITY_SECRET: ${ANONYMITY_SECRET:?copy .env.example to .env and set ANONYMITY_SECRET}
+      WORKHUB_INITIAL_PASSWORD: ${WORKHUB_INITIAL_PASSWORD:-}
+      SUPER_ADMIN_USERNAME: ${SUPER_ADMIN_USERNAME:-}
+      SUPER_ADMIN_PASSWORD: ${SUPER_ADMIN_PASSWORD:-}
+    ports:
+      - "${SERVER_PORT:?copy .env.example to .env and set SERVER_PORT}:8080"
+    volumes:
+      - ./uploads:/app/uploads
+      - ./releases:/app/releases
+
+volumes:
+  db-data:

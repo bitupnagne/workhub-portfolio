@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>휴가·근태</title>
+  <link rel="icon" type="image/svg+xml" th:href="@{/img/AppLogoMini.svg}">
+  <link rel="stylesheet" th:href="@{/css/worksystem.css}">
+  <!-- 페이지 이동 화면 전환 오류 정리 — 첫 화면 그리기 전에 실행돼야 해서 head 에 둔다 -->
+  <script th:src="@{/js/worksystem-view-transition.js}"></script>
+</head>
+<body>
+<div class="app">
+  <div th:replace="~{fragments/app :: sidebar}"></div>
+  <main>
+    <div th:replace="~{fragments/app :: topbar}"></div>
+    <div class="content">
+      <div class="banner ok" th:if="${message}" th:text="${message}"></div>
+      <div class="banner err" th:if="${error}" th:text="${error}"></div>
+
+      <!-- [UX17/UX20] 상단 출퇴근(강조)·오늘 상태·신청 / 캘린더 공유 / 목록 탭 -->
+      <div class="att-topbar">
+        <div class="att-clock">
+          <!-- [UX20] 큼직한 출퇴근 버튼 — 클릭 시 현재시각·판정 확인 모달 -->
+          <th:block th:if="${todayCheckBlockReason != null}">
+            <button class="att-check-btn disabled" type="button" disabled>출근 체크</button>
+            <span class="readonly-badge" th:text="${todayCheckBlockReason}">오늘은 출근 체크 대상이 아닙니다</span>
+          </th:block>
+          <!-- [OT] 휴무일·퇴근시각 이후·퇴근 후 재출근은 같은 버튼이 시간외 기록으로 남긴다 -->
+          <th:block th:if="${todayCheckBlockReason == null and (openOvertimeSession != null or overtimeModeReason != null)}">
+            <form th:if="${openOvertimeSession != null}" th:action="@{/hr/attendance/check-out}" method="post" data-check-form data-check-kind="out">
+              <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+              <button class="att-check-btn out" type="submit">시간외 퇴근</button>
+            </form>
+            <form th:if="${openOvertimeSession == null}" th:action="@{/hr/attendance/check-in}" method="post" data-check-form data-check-kind="in">
+              <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+              <button class="att-check-btn in" type="submit">시간외 출근</button>
+            </form>
+            <span class="readonly-badge" th:if="${openOvertimeSession == null}" th:text="${overtimeModeReason}">휴무 요일</span>
+          </th:block>
+          <th:block th:if="${todayCheckBlockReason == null and openOvertimeSession == null and overtimeModeReason == null}">
+            <form th:if="${todayRecord == null or todayRecord.checkInAt == null}" th:action="@{/hr/attendance/check-in}" method="post" data-check-form data-check-kind="in">
+              <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+              <button class="att-check-btn in" type="submit">출근 체크</button>
+            </form>
+            <form th:if="${todayRecord != null and todayRecord.checkInAt != null and todayRecord.checkOutAt == null}" th:action="@{/hr/attendance/check-out}" method="post" data-check-form data-check-kind="out">
+              <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+              <button class="att-check-btn out" type="submit">퇴근 체크</button>
+            </form>
+            <span class="att-check-done" th:if="${todayRecord != null and todayRecord.checkInAt != null and todayRecord.checkOutAt != null}">오늘 근무 완료</span>
+          </th:block>
+          <div class="att-today-status">
+            <span th:if="${todayRecord == null or todayRecord.checkInAt == null}" class="muted">오늘 출근 기록 없음</span>
+            <span th:if="${todayRecord != null and todayRecord.checkInAt != null and todayRecord.checkOutAt == null}"
+                  th:text="|출근 ${#temporals.format(todayRecord.checkInAt, 'HH:mm')} · ${todayRecord.status.label} · 근무중|">출근 09:00 · 정상 · 근무중</span>
+            <span th:if="${todayRecord != null and todayRecord.checkInAt != null and todayRecord.checkOutAt != null}"
+                  th:text="|출근 ${#temporals.format(todayRecord.checkInAt, 'HH:mm')} · 퇴근 ${#temporals.format(todayRecord.checkOutAt, 'HH:mm')} · ${todayRecord.status.label}|">출근 09:00 · 퇴근 18:00 · 정상</span>
+            <span class="muted" th:text="|오늘 기준 ${#temporals.format(todaySchedule.startTime, 'HH:mm')} ~ ${#temporals.format(todaySchedule.endTime, 'HH:mm')}|">오늘 기준 09:00 ~ 18:00</span>
+            <span th:each="s : ${todayOvertimeSessions}" th:text="|시간외 ${s.timeText}|">시간외 19:00 ~ 21:00</span>
+          </div>
+        </div>
+        <div class="att-apply">
+          <button class="rbtn acc att-apply-trigger" type="button" data-application-picker-open
+                  aria-haspopup="dialog" aria-controls="applicationPickerModal" aria-expanded="false">신청</button>
+        </div>
+      </div>
+
+      <!-- [UX19] 진입 시 미체크 알림 -->
+      <div th:if="${attendanceReminder != null}" class="att-reminder" th:attr="data-reminder-kind=${attendanceReminder.kind}"
+           th:data-reminder-msg="${attendanceReminder.message}"></div>
+
+      <div class="stats-grid">
+        <div class="stat-card sc-green"><div class="stat-label">연차 잔여 / 부여</div><div class="stat-value sv-green compact" th:text="|${balance.remainingDays}/${balance.totalDays}|">15/15</div><span class="stat-tag st-green">일</span></div>
+        <div class="stat-card sc-blue"><div class="stat-label">조회 기간 출근</div><div class="stat-value sv-blue" th:text="${attendanceCount}">0</div><span class="stat-tag st-blue" th:text="|${#temporals.format(fromDate, 'M/d')}~${#temporals.format(toDate, 'M/d')}|">기간</span></div>
+        <div class="stat-card sc-orange"><div class="stat-label">조회 기간 지각/결근</div><div class="stat-value sv-orange compact" th:text="|${lateCount}/${absentCount}|"></div><span class="stat-tag st-orange" th:text="|${#temporals.format(fromDate, 'M/d')}~${#temporals.format(toDate, 'M/d')}|">기간</span></div>
+        <div class="stat-card sc-grad"><div class="stat-label">휴가·출장 대기</div><div class="stat-value sv-grad compact" th:text="|${pendingLeaveCount}/${pendingTripCount}|">0/0</div><span class="stat-tag st-grad">건</span></div>
+      </div>
+
+      <!-- 통합 월 캘린더 — 근태/휴가/반차/출장/시차/공휴일 오버레이 -->
+      <section class="section-block" data-ws-query-contract="attendance-calendar-v1" data-ws-query-path="self" data-ws-query-params="cal" data-ws-query-context="attendance-calendar">
+        <div class="section-header no-caret attendance-calendar-head">
+          <div class="section-left">
+            <a class="rbtn" th:href="@{/hr/attendance(cal=${calPrev}, tab=${hrTab})}" data-ws-query-state="calendar-heading-0"><svg th:replace="~{fragments/icons :: i('chevron_left')}"></svg></a>
+            <span class="sname" th:text="|${calMonthLabel} 캘린더|" data-ws-query-state="calendar-heading-1">2026년 7월 캘린더</span>
+            <a class="rbtn" th:href="@{/hr/attendance(cal=${calNext}, tab=${hrTab})}" data-ws-query-state="calendar-heading-2"><svg th:replace="~{fragments/icons :: i('chevron_right')}"></svg></a>
+          </div>
+          <div class="ws-help">
+            <button class="ws-help-toggle" type="button" data-help-toggle
+              aria-label="근태 상태 범례" title="근태 상태 범례" aria-expanded="false"
+              aria-controls="help-legend-1" aria-haspopup="dialog">
+              <svg th:replace="~{fragments/icons :: i('help')}"></svg>
+            </button>
+            <div id="help-legend-1" class="ws-help-popover" data-help-popover
+              role="dialog" aria-labelledby="help-legend-1-title" hidden>
+              <div class="ws-help-head">
+                <strong id="help-legend-1-title">근태 상태 범례</strong>
+                <button class="btn primary" type="button" data-help-close>닫기</button>
+              </div>
+              <div class="ws-help-items">
+                <span class="acal-pill ok">정상</span><span class="acal-pill warn">지각·조퇴</span>
+                <span class="acal-pill bad">결근</span><span class="acal-pill trip">출장</span>
+                <span class="acal-pill hol">휴가·휴무</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="table-scroll" data-ws-query-region="calendar">
+          <table class="acal-table">
+            <thead><tr><th>일</th><th>월</th><th>화</th><th>수</th><th>목</th><th>금</th><th>토</th></tr></thead>
+            <tbody>
+              <tr th:each="week : ${attCalendar}">
+                <td th:each="day : ${week}">
+                  <div th:if="${day.day > 0}" class="acal-day"
+                       th:classappend="${day.today} ? ' is-today' : ''"
+                       th:attr="data-acal-date=${day.iso},
+                                data-acal-status=${day.status != null ? day.status.statusLabel : '휴무 요일'},
+                                data-acal-future=${day.status != null and day.status.future},
+                                data-acal-sched=${day.status != null ? #temporals.format(day.status.startTime, 'HH:mm') + '~' + #temporals.format(day.status.endTime, 'HH:mm') : ''},
+                                data-acal-in=${day.status != null and day.status.checkInAt != null ? #temporals.format(day.status.checkInAt, 'HH:mm') : ''},
+                                data-acal-out=${day.status != null and day.status.checkOutAt != null ? #temporals.format(day.status.checkOutAt, 'HH:mm') : ''},
+                                data-acal-note=${day.status != null ? day.status.note : ''},
+                                data-acal-schednote=${day.status != null ? day.status.scheduleNote : ''}">
+                    <span class="acal-num" th:classappend="${day.weekend} ? ' weekend' : ''" th:text="${day.day}">1</span>
+                    <span th:if="${day.status != null and !(day.status.future and day.status.status.name() == 'SCHEDULED')}" class="acal-pill"
+                          th:classappend="${day.status.status.name() == 'NORMAL'} ? ' ok'
+                                          : (${day.status.status.name() == 'LATE' or day.status.status.name() == 'EARLY_LEAVE'} ? ' warn'
+                                          : (${day.status.status.name() == 'ABSENT'} ? ' bad'
+                                          : (${day.status.status.name() == 'BUSINESS_TRIP'} ? ' trip'
+                                          : (${day.status.status.name() == 'HOLIDAY'} ? ' hol' : ' plain'))))"
+                          th:text="${day.status.status.name() == 'HOLIDAY' and day.status.note != null ? day.status.note : day.status.status.label}">정상</span>
+                    <span th:if="${day.status != null and day.status.checkInAt != null}" class="acal-times"
+                          th:text="|${#temporals.format(day.status.checkInAt, 'HH:mm')}${day.status.checkOutAt != null ? '~' + #temporals.format(day.status.checkOutAt, 'HH:mm') : ''}|">09:00~18:00</span>
+                    <!-- [UX42] 휴가·출장 결재 진행 배지 — 요청함/진행중(누구 완·미완)/완료 -->
+                    <span th:each="it : ${day.items}" class="acal-apr" th:classappend="' ' + ${it.aprCss}"
+                          th:title="|${it.kind} ${it.label != null ? it.label : ''} — ${it.aprDetail}|"
+                          th:text="|${it.kind} · ${it.aprLabel}|">휴가 · 결재 진행중</span>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <div id="attendance-history" class="attendance-history" th:fragment="attendanceHistory"
+           th:data-current-tab="${hrTab}" th:data-history-url="${attendanceHistoryUrl}" data-ws-query-owner="attendance-calendar-v1" data-ws-query-meta="history-context" data-ws-query-meta-attrs="data-history-url data-current-tab" data-ws-query-link-params="cal">
+        <div class="attendance-history-status" data-attendance-status role="status" aria-live="polite" hidden>
+          <span data-attendance-message></span>
+          <button class="rbtn" type="button" data-attendance-retry hidden>다시 시도</button>
+          <a class="rbtn" data-attendance-fallback hidden>페이지로 열기</a>
+        </div>
+      <!-- 목록 탭 -->
+      <div class="hr-tabs ws-section-tabs" role="tablist" aria-label="휴가·근태 내역">
+        <a class="hr-tab" role="tab" id="attendance-tab-attendance" data-attendance-tab="attendance" aria-controls="attendance-history-panel" th:attr="aria-selected=${hrTab == 'attendance'}" th:classappend="${hrTab == 'attendance'} ? ' active'" th:href="@{/hr/attendance(tab='attendance', cal=${cal})}">근태 현황</a>
+        <a class="hr-tab" role="tab" id="attendance-tab-leave" data-attendance-tab="leave" aria-controls="attendance-history-panel" th:attr="aria-selected=${hrTab == 'leave'}" th:classappend="${hrTab == 'leave'} ? ' active'" th:href="@{/hr/attendance(tab='leave', cal=${cal})}" th:text="|휴가 (${leaveTotal})|">휴가</a>
+        <a class="hr-tab" role="tab" id="attendance-tab-flex" data-attendance-tab="flex" aria-controls="attendance-history-panel" th:attr="aria-selected=${hrTab == 'flex'}" th:classappend="${hrTab == 'flex'} ? ' active'" th:href="@{/hr/attendance(tab='flex', cal=${cal})}" th:text="|시차출근 (${flexTotal})|">시차출근</a>
+        <a class="hr-tab" role="tab" id="attendance-tab-trip" data-attendance-tab="trip" aria-controls="attendance-history-panel" th:attr="aria-selected=${hrTab == 'trip'}" th:classappend="${hrTab == 'trip'} ? ' active'" th:href="@{/hr/attendance(tab='trip', cal=${cal})}" th:text="|출장 (${tripTotal})|">출장</a>
+        <a class="hr-tab" role="tab" id="attendance-tab-correction" data-attendance-tab="correction" aria-controls="attendance-history-panel" th:attr="aria-selected=${hrTab == 'correction'}" th:classappend="${hrTab == 'correction'} ? ' active'" th:href="@{/hr/attendance(tab='correction', cal=${cal})}" th:text="|정정 (${#lists.size(attendanceCorrections)})|">정정</a>
+      </div>
+
+      <div id="attendance-history-panel" class="attendance-history-panel" role="tabpanel" th:attr="aria-labelledby=|attendance-tab-${hrTab}|" tabindex="-1">
+      <!-- 근태 현황 탭 -->
+      <section class="section-block" th:if="${hrTab == 'attendance'}">
+        <div class="section-header no-caret">
+          <div class="section-left"><span class="sdot sdot-new"></span><span class="sname">근태 현황</span><span class="scnt scnt-new" th:text="${#lists.size(records)}">0</span></div>
+          <div class="section-actions">
+            <form th:action="@{/hr/attendance}" method="get" class="inline-form">
+              <input type="hidden" name="tab" value="attendance">
+              <input class="mini-input att-date-input" type="date" name="from" th:value="${fromDate}" aria-label="시작일">
+              <input class="mini-input att-date-input" type="date" name="to" th:value="${toDate}" aria-label="종료일">
+              <input class="mini-input" name="q" th:value="${query}" placeholder="근태 검색">
+              <button class="rbtn" type="submit">조회</button>
+            </form>
+          </div>
+        </div>
+        <div class="table-scroll">
+        <table class="rt">
+          <thead><tr><th>#</th><th>일자</th><th>기준</th><th>출근</th><th>퇴근</th><th>상태</th><th class="col-c">비고</th><th>관리</th></tr></thead>
+          <tbody>
+          <tr class="empty-tr" th:if="${#lists.isEmpty(records)}"><td colspan="8">근태 기록이 없습니다</td></tr>
+          <tr class="mr" th:each="record, stat : ${records}">
+            <td th:text="${stat.count}">1</td>
+            <td><span class="date-mono" th:text="${record.workDate}">2026-05-14</span></td>
+            <td><span class="date-mono" th:text="|${#temporals.format(record.startTime, 'HH:mm')}~${#temporals.format(record.endTime, 'HH:mm')}|">09:00~18:00</span></td>
+            <td><span class="date-mono" th:text="${record.checkInAt == null ? '-' : #temporals.format(record.checkInAt, 'HH:mm')}">09:00</span></td>
+            <td><span class="date-mono" th:text="${record.checkOutAt == null ? '-' : #temporals.format(record.checkOutAt, 'HH:mm')}">18:00</span></td>
+            <td>
+              <span th:if="${record.status.name() == 'HOLIDAY'}" class="att-status-text holiday"
+                    th:text="${record.scheduleNote != null and record.scheduleNote != '기본'} ? |휴무(${record.scheduleNote})| : '휴무'">휴무</span>
+              <span th:unless="${record.status.name() == 'HOLIDAY'}" class="att-status-dot-wrap">
+                <span class="att-status-dot"
+                      th:classappend="${record.status.name() == 'NORMAL'} ? ' normal' : (${record.status.name() == 'ABSENT'} ? ' absent' : (${record.status.name() == 'LATE' or record.status.name() == 'EARLY_LEAVE'} ? ' warn' : ' pending'))"></span>
+                <span th:text="${record.statusLabel}">정상</span>
+              </span>
+            </td>
+            <td><span class="muted" th:text="${record.note}"></span></td>
+            <td>
+              <a class="rbtn acc" th:unless="${record.correctionPending or record.future}"
+                 th:href="@{/hr/attendance/correction/new(date=${record.workDate})}" data-app-form data-app-form-label="근태 정정 신청">정정신청</a>
+              <span class="readonly-badge" th:if="${record.correctionPending}">정정 신청중</span>
+            </td>
+          </tr>
+          </tbody>
+        </table>
+        </div>
+        <div th:replace="~{fragments/app :: pagination(${pageInfo}, ${pageBaseUrl})}"></div>
+      </section>
+
+      <!-- 휴가 탭 -->
+      <section class="section-block" th:if="${hrTab == 'leave'}">
+        <div class="leave-tenure-panel" style="margin-bottom:12px;">
+          <div><span>근속 기간</span><strong th:text="${leaveEntitlementSummary.tenureText}">0년 근무중</strong></div>
+          <div><span>발생 연(월)차</span><strong th:text="${leaveEntitlementSummary.entitlementText}">15</strong></div>
+          <div><span>연차 잔여</span><strong th:text="|${balance.remainingDays}일|">15일</strong></div>
+        </div>
+        <div class="section-header no-caret">
+          <div class="section-left"><span class="sdot sdot-done"></span><span class="sname">휴가 신청 내역</span><span class="scnt scnt-done" th:text="${leaveTotal}">0</span></div>
+          <div class="section-actions">
+            <form th:action="@{/hr/attendance}" method="get" class="inline-form">
+              <input type="hidden" name="tab" value="leave">
+              <input class="mini-input" name="lq" th:value="${leaveQuery}" placeholder="종류 / 사유 검색">
+              <select class="mini-input" name="lstatus">
+                <option value="ALL" th:selected="${leaveStatusFilter == ''}">전체 상태</option>
+                <option th:each="st : ${leaveStatuses}" th:value="${st.name()}" th:selected="${leaveStatusFilter == st.name()}" th:text="${st.label}">승인 대기</option>
+              </select>
+              <button class="rbtn" type="submit">조회</button>
+            </form>
+          </div>
+        </div>
+        <div class="table-scroll">
+          <table class="rt board-table">
+            <thead><tr><th>#</th><th>종류</th><th>기간</th><th>일수</th><th>상태</th><th class="col-c">사유/반려</th><th>관리</th></tr></thead>
+            <tbody>
+            <tr class="empty-tr" th:if="${#lists.isEmpty(leaveRequests)}"><td colspan="7">휴가 신청 내역이 없습니다</td></tr>
+            <tr class="mr" th:each="lr, stat : ${leaveRequests}">
+              <td th:text="${stat.count}">1</td>
+              <td><span class="cycle-badge" th:text="${lr.typeLabel}">연차</span></td>
+              <td><span class="date-mono" th:text="|${lr.startDate} ~ ${lr.endDate}|"></span></td>
+              <td th:text="${lr.days}">1</td>
+              <td><span class="status-pill" th:classappend="${lr.status.name() == 'APPROVED' or lr.status.name() == 'CANCEL_APPROVED'} ? ' ok' : (${lr.status.name() == 'REJECTED'} ? ' danger' : (${lr.status.name() == 'CANCEL_PENDING'} ? ' warn' : ''))" th:text="${lr.status.label}">상태</span></td>
+              <td>
+                <span th:text="${lr.reason}">사유</span>
+                <div class="muted" th:if="${lr.rejectedReason}" th:text="|반려: ${lr.rejectedReason}|"></div>
+              </td>
+              <td>
+                <div class="act-wrap">
+                  <a class="rbtn acc" th:href="@{|/hr/leave/${lr.id}/document|}" data-doc-popup target="_blank" rel="noopener">문서 열기</a>
+                  <button class="rbtn" type="button" th:if="${lr.status.name() == 'APPROVED' and lr.userId == currentUser.userId}"
+                          data-leave-cancel-open th:data-preview-url="@{|/hr/leave/${lr.id}/cancel-request/preview|}"
+                          th:data-submit-url="@{|/hr/leave/${lr.id}/cancel-request|}">취소 신청</button>
+                  <form th:if="${lr.status.name() == 'CANCEL_PENDING' and lr.userId == currentUser.userId}"
+                        th:action="@{|/hr/leave/${lr.id}/cancel-withdraw|}" method="post"
+                        data-confirm-message="휴가 취소 결재를 회수하시겠습니까? 승인된 휴가는 유지됩니다." data-confirm-ok="취소 결재 회수">
+                    <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                    <input type="hidden" name="back" value="/hr/attendance?tab=leave">
+                    <button class="rbtn" type="submit">취소 결재 회수</button>
+                  </form>
+                  <form th:if="${lr.pending and lr.userId == currentUser.userId}" th:action="@{|/hr/leave/${lr.id}/cancel|}" method="post"
+                        data-confirm-message="휴가 신청을 회수하시겠습니까?" data-confirm-ok="회수" data-confirm-danger="true">
+                    <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                    <button class="rbtn del" type="submit">회수</button>
+                  </form>
+                </div>
+              </td>
+            </tr>
+            </tbody>
+          </table>
+        </div>
+        <div th:replace="~{fragments/app :: pagination(${leavePageInfo}, ${leavePageBaseUrl})}"></div>
+      </section>
+
+      <!-- 시차출근 탭 -->
+      <section class="section-block" th:if="${hrTab == 'flex'}">
+        <div class="section-header no-caret">
+          <div class="section-left"><span class="sdot sdot-new"></span><span class="sname">시차출근 신청 내역</span><span class="scnt scnt-new" th:text="${flexTotal}">0</span></div>
+          <div class="section-actions">
+            <form th:action="@{/hr/attendance}" method="get" class="inline-form">
+              <input type="hidden" name="tab" value="flex">
+              <input class="mini-input" name="fq" th:value="${flexQuery}" placeholder="근무 조 / 사유 검색">
+              <select class="mini-input" name="fstatus">
+                <option value="ALL" th:selected="${flexStatusFilter == ''}">전체 상태</option>
+                <option th:each="st : ${flexTimeStatuses}" th:value="${st.name()}" th:selected="${flexStatusFilter == st.name()}" th:text="${st.label}">승인 대기</option>
+              </select>
+              <button class="rbtn" type="submit">조회</button>
+            </form>
+          </div>
+        </div>
+        <div class="table-scroll">
+          <table class="rt board-table">
+            <thead><tr><th>#</th><th>근무 조</th><th>기간</th><th>결재 단계</th><th>상태</th><th>관리</th></tr></thead>
+            <tbody>
+            <tr class="empty-tr" th:if="${#lists.isEmpty(flexTimeRequests)}"><td colspan="6">시차출근 신청 내역이 없습니다</td></tr>
+            <tr class="mr" th:each="ft, stat : ${flexTimeRequests}">
+              <td th:text="${stat.count}">1</td>
+              <td><span class="cycle-badge" th:text="${ft.shiftGroupDisplay}">A조</span></td>
+              <td><span class="date-mono" th:text="|${ft.startDate} ~ ${ft.endDate}|"></span></td>
+              <td>
+                <div class="approval-mini-flow" th:if="${flexTimeApprovalSteps[ft.id] != null and !#lists.isEmpty(flexTimeApprovalSteps[ft.id])}">
+                  <span th:each="step : ${flexTimeApprovalSteps[ft.id]}"
+                        th:classappend="${step.status.name() == 'APPROVED'} ? ' done' : (${step.status.name() == 'REJECTED'} ? ' rejected' : '')"
+                        th:text="|${step.stepOrder}. ${step.delegateName == null ? step.approverName : step.approverName + ' / 대리 ' + step.delegateName}|">1. 결재권자</span>
+                </div>
+                <span class="muted" th:if="${flexTimeApprovalSteps[ft.id] == null or #lists.isEmpty(flexTimeApprovalSteps[ft.id])}">결재 이력 없음</span>
+              </td>
+              <td><span class="status-pill" th:classappend="${ft.status.name() == 'APPROVED'} ? ' ok' : (${ft.status.name() == 'REJECTED' or ft.status.name() == 'CANCELED'} ? ' danger' : '')" th:text="${ft.status.label}">상태</span></td>
+              <td>
+                <div class="act-wrap">
+                  <a class="rbtn acc" th:href="@{|/hr/flex-time/${ft.id}/document|}" data-doc-popup target="_blank" rel="noopener">문서 열기</a>
+                  <form th:if="${ft.pending and ft.userId == currentUser.userId}" th:action="@{|/hr/flex-time/${ft.id}/cancel|}" method="post"
+                        data-confirm-message="시차출근 신청을 회수하시겠습니까?" data-confirm-ok="회수" data-confirm-danger="true">
+                    <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                    <button class="rbtn del" type="submit">회수</button>
+                  </form>
+                </div>
+              </td>
+            </tr>
+            </tbody>
+          </table>
+        </div>
+        <div th:replace="~{fragments/app :: pagination(${flexPageInfo}, ${flexPageBaseUrl})}"></div>
+      </section>
+
+      <!-- 출장 탭 -->
+      <section class="section-block" th:if="${hrTab == 'trip'}">
+        <div class="section-header no-caret">
+          <div class="section-left"><span class="sdot sdot-done"></span><span class="sname">출장 신청 내역</span><span class="scnt scnt-done" th:text="${tripTotal}">0</span></div>
+          <div class="section-actions">
+            <form th:action="@{/hr/attendance}" method="get" class="inline-form">
+              <input type="hidden" name="tab" value="trip">
+              <input class="mini-input" name="tq" th:value="${tripQuery}" placeholder="출장지 / 목적 검색">
+              <select class="mini-input" name="tstatus">
+                <option value="ALL" th:selected="${tripStatusFilter == ''}">전체 상태</option>
+                <option th:each="st : ${tripStatuses}" th:value="${st.name()}" th:selected="${tripStatusFilter == st.name()}" th:text="${st.label}">승인 대기</option>
+              </select>
+              <button class="rbtn" type="submit">조회</button>
+            </form>
+          </div>
+        </div>
+        <div class="table-scroll">
+          <table class="rt board-table">
+            <thead><tr><th>#</th><th>기간</th><th>출장지</th><th>상태</th><th class="col-c">목적/반려</th><th>관리</th></tr></thead>
+            <tbody>
+            <tr class="empty-tr" th:if="${#lists.isEmpty(trips)}"><td colspan="6">출장 신청 내역이 없습니다</td></tr>
+            <tr class="mr" th:each="trip, stat : ${trips}">
+              <td th:text="${stat.count}">1</td>
+              <td><span class="date-mono" th:text="|${trip.startDate} ~ ${trip.endDate}|"></span></td>
+              <td th:text="${trip.destination}">출장지</td>
+              <td><span class="status-pill" th:classappend="${trip.status.name() == 'APPROVED'} ? ' ok' : (${trip.status.name() == 'REJECTED'} ? ' danger' : '')" th:text="${trip.status.label}">상태</span></td>
+              <td>
+                <span th:text="${trip.purpose}">목적</span>
+                <div class="muted" th:if="${trip.rejectedReason}" th:text="|반려: ${trip.rejectedReason}|"></div>
+              </td>
+              <td>
+                <!-- [UX47] 출장신청서·출장보고서는 한 세트 — 보고서 미작성 시 disabled + '미작성' 안내 -->
+                <div class="act-wrap" th:with="rep=${tripReports[trip.id]}">
+                  <a class="rbtn acc" th:href="@{|/hr/trips/${trip.id}/document|}" data-doc-popup target="_blank" rel="noopener">출장신청서</a>
+                  <a th:if="${rep != null and (rep.status.name() == 'PENDING' or rep.status.name() == 'APPROVED')}"
+                     class="rbtn acc" th:href="@{|/hr/trips/report/${rep.id}/document|}" data-doc-popup target="_blank" rel="noopener"
+                     th:text="|출장보고서${rep.status.name() == 'PENDING' ? ' (결재중)' : ''}|">출장보고서</a>
+                  <a th:if="${(rep == null or rep.status.name() == 'REJECTED' or rep.status.name() == 'CANCELED') and trip.status.name() == 'APPROVED' and trip.userId == currentUser.userId}"
+                     class="rbtn" th:href="@{|/hr/trips/${trip.id}/report/new|}"
+                     th:text="${rep != null and rep.status.name() == 'REJECTED' ? '보고서 재작성' : '보고서 작성'}">보고서 작성</a>
+                  <span th:if="${(rep == null or rep.status.name() == 'CANCELED') and !(trip.status.name() == 'APPROVED' and trip.userId == currentUser.userId)}"
+                        class="rbtn is-disabled" title="출장보고서가 아직 작성되지 않았습니다." aria-disabled="true">출장보고서</span>
+                  <form th:if="${trip.pending and trip.userId == currentUser.userId}" th:action="@{|/hr/trips/${trip.id}/cancel|}" method="post"
+                        data-confirm-message="출장 신청을 회수하시겠습니까?" data-confirm-ok="회수" data-confirm-danger="true">
+                    <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                    <button class="rbtn del" type="submit">회수</button>
+                  </form>
+                  <form th:if="${rep != null and rep.status.name() == 'PENDING' and trip.userId == currentUser.userId}"
+                        th:action="@{|/hr/trips/report/${rep.id}/cancel|}" method="post"
+                        data-confirm-message="출장 보고서를 회수하시겠습니까?" data-confirm-ok="회수" data-confirm-danger="true">
+                    <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                    <button class="rbtn del" type="submit">보고서 회수</button>
+                  </form>
+                </div>
+              </td>
+            </tr>
+            </tbody>
+          </table>
+        </div>
+        <div th:replace="~{fragments/app :: pagination(${tripPageInfo}, ${tripPageBaseUrl})}"></div>
+      </section>
+
+      <!-- 정정 탭 -->
+      <section class="section-block" th:if="${hrTab == 'correction'}">
+        <div class="section-header no-caret">
+          <div class="section-left"><span class="sdot sdot-done"></span><span class="sname">근태 정정 신청 내역</span><span class="scnt scnt-done" th:text="${#lists.size(attendanceCorrections)}">0</span></div>
+          <div class="section-actions">
+            <form th:action="@{/hr/attendance}" method="get" class="inline-form">
+              <input type="hidden" name="tab" value="correction">
+              <input class="mini-input" type="text" name="cq" th:value="${correctionQuery}" placeholder="정정 검색">
+              <button class="rbtn" type="submit">조회</button>
+            </form>
+          </div>
+        </div>
+        <div class="table-scroll">
+          <table class="rt board-table">
+            <thead><tr><th>#</th><th>대상일</th><th>정정 출근</th><th>정정 퇴근</th><th>상태</th><th>관리</th></tr></thead>
+            <tbody>
+            <tr class="empty-tr" th:if="${#lists.isEmpty(attendanceCorrections)}"><td colspan="6">근태 정정 신청 내역이 없습니다</td></tr>
+            <tr class="mr" th:each="ac, stat : ${attendanceCorrections}">
+              <td th:text="${stat.count}">1</td>
+              <td><span class="date-mono" th:text="${ac.workDate}">2026-05-14</span></td>
+              <td><span class="date-mono" th:text="${ac.requestedCheckIn != null ? #temporals.format(ac.requestedCheckIn, 'HH:mm') : '-'}">-</span></td>
+              <td><span class="date-mono" th:text="${ac.requestedCheckOut != null ? #temporals.format(ac.requestedCheckOut, 'HH:mm') : '-'}">-</span></td>
+              <td><span class="status-pill" th:classappend="${ac.status.name() == 'APPROVED'} ? ' ok' : (${ac.status.name() == 'REJECTED' or ac.status.name() == 'CANCELED'} ? ' danger' : '')" th:text="${ac.status.label}">상태</span></td>
+              <td>
+                <div class="act-wrap">
+                  <a class="rbtn acc" th:href="@{|/hr/attendance/correction/${ac.id}/document|}" data-doc-popup target="_blank" rel="noopener">문서 열기</a>
+                  <form th:if="${ac.pending and ac.userId == currentUser.userId}" th:action="@{|/hr/attendance/correction/${ac.id}/cancel|}" method="post"
+                        data-confirm-message="정정 신청을 회수하시겠습니까?" data-confirm-ok="회수" data-confirm-danger="true">
+                    <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                    <button class="rbtn del" type="submit">회수</button>
+                  </form>
+                </div>
+              </td>
+            </tr>
+            </tbody>
+          </table>
+        </div>
+        <div th:replace="~{fragments/app :: pagination(${correctionPageInfo}, ${correctionPageBaseUrl})}"></div>
+      </section>
+      </div>
+      </div>
+
+    </div>
+  </main>
+</div>
+
+<!-- 캘린더 날짜 상세 모달 -->
+<div class="schedule-edit-modal" data-acal-modal hidden>
+  <div class="schedule-edit-dialog compact" role="dialog" aria-modal="true" aria-labelledby="acalModalTitle">
+    <div class="schedule-edit-head">
+      <strong id="acalModalTitle" data-acal-modal-date>2026-07-01</strong>
+      <button type="button" data-acal-close aria-label="닫기"><svg th:replace="~{fragments/icons :: i('close')}"></svg></button>
+    </div>
+    <div class="schedule-edit-body">
+      <dl class="acal-detail">
+        <dt>상태</dt><dd data-acal-modal-status>-</dd>
+        <dt>기준 근무시간</dt><dd data-acal-modal-sched>-</dd>
+        <dt>출근</dt><dd data-acal-modal-in>-</dd>
+        <dt>퇴근</dt><dd data-acal-modal-out>-</dd>
+        <dt>비고</dt><dd data-acal-modal-note>-</dd>
+      </dl>
+    </div>
+    <div class="schedule-edit-foot">
+      <a class="btn primary" data-acal-modal-correction data-app-form data-app-form-label="근태 정정 신청" href="#">근태 정정 신청</a>
+      <button class="rbtn" type="button" data-acal-close>닫기</button>
+    </div>
+  </div>
+</div>
+
+<!-- [UX20] 출퇴근 확인 모달 -->
+<div class="schedule-edit-modal" data-check-modal hidden>
+  <div class="schedule-edit-dialog compact" role="dialog" aria-modal="true">
+    <div class="schedule-edit-head">
+      <strong data-check-title>출근 확인</strong>
+      <button type="button" data-check-close aria-label="닫기"><svg th:replace="~{fragments/icons :: i('close')}"></svg></button>
+    </div>
+    <div class="schedule-edit-body" style="text-align:center;">
+      <div class="att-check-now" data-check-now>--:--:--</div>
+      <p class="att-check-judge" data-check-judge></p>
+    </div>
+    <div class="schedule-edit-foot">
+      <button class="btn primary" type="button" data-check-confirm>확인</button>
+      <button class="rbtn" type="button" data-check-close>취소</button>
+    </div>
+  </div>
+</div>
+
+<!-- [UX19] 진입 알림 모달 -->
+<div class="schedule-edit-modal" data-reminder-modal hidden>
+  <div class="schedule-edit-dialog compact" role="dialog" aria-modal="true">
+    <div class="schedule-edit-head">
+      <strong>근태 알림</strong>
+      <button type="button" data-reminder-close aria-label="닫기"><svg th:replace="~{fragments/icons :: i('close')}"></svg></button>
+    </div>
+    <div class="schedule-edit-body">
+      <p data-reminder-text style="font-size:14px;">알림</p>
+    </div>
+    <div class="schedule-edit-foot">
+      <button class="btn primary" type="button" data-reminder-act>지금 체크하기</button>
+      <button class="rbtn" type="button" data-reminder-close>나중에</button>
+    </div>
+  </div>
+</div>
+
+<!-- [UX23] 신청 폼 모달 — 바깥 클릭으로는 닫히지 않음(× 버튼/ESC만) -->
+
+<div class="schedule-edit-modal" id="applicationPickerModal" data-application-picker-modal hidden>
+  <div class="schedule-edit-dialog application-picker-dialog" role="dialog" aria-modal="true"
+       aria-labelledby="applicationPickerTitle">
+    <div class="schedule-edit-head">
+      <strong id="applicationPickerTitle">신청 유형 선택</strong>
+      <button type="button" data-application-picker-close aria-label="신청 유형 선택 닫기"><svg th:replace="~{fragments/icons :: i('close')}"></svg></button>
+    </div>
+    <div class="schedule-edit-body">
+      <div class="application-picker-grid">
+        <a class="application-picker-card" th:href="@{/hr/leave/new}" data-app-form data-app-form-size="wide" data-app-form-label="휴가 신청">
+          휴가신청
+        </a>
+        <a class="application-picker-card" th:href="@{/hr/flex-time/new}" data-app-form data-app-form-label="시차출근 신청">
+          시차출근 신청
+        </a>
+        <a class="application-picker-card" th:href="@{/hr/trips/new}" data-app-form data-app-form-size="wide" data-app-form-label="출장 신청">
+          출장 신청
+        </a>
+        <a class="application-picker-card" th:href="@{/hr/attendance/correction/new}" data-app-form data-app-form-label="근태 정정 신청">
+          근태 정정
+        </a>
+        <a class="application-picker-card" th:href="@{/hr/overtime/new}" data-app-form data-app-form-label="시간외 근무 신청">
+          시간외 근무
+        </a>
+        <a class="application-picker-card" th:href="@{/hr/outside-work/new}" data-app-form data-app-form-label="외근 신청">
+          외근
+        </a>
+      </div>
+    </div>
+    <div class="schedule-edit-foot">
+      <button class="rbtn" type="button" data-application-picker-close>닫기</button>
+    </div>
+  </div>
+</div>
+
+
+<script th:src="@{/js/worksystem-attendance-cal.js}"></script>
+<script th:src="@{/js/worksystem-attendance-check.js}"></script>
+<script th:src="@{/js/worksystem-settings-modal.js}"></script>
+<script th:src="@{/js/worksystem-app-form-modal.js}"></script>
+<script th:src="@{/js/worksystem-att-correction.js}"></script>
+<script th:src="@{/js/worksystem-leave-cancel.js}"></script>
+<script th:src="@{/js/worksystem-trip-expenses.js}"></script>
+<script th:src="@{/js/worksystem-attendance-tabs.js}"></script>
+</body>
+</html>

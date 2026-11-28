@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title th:text="${title}">직원 등록</title>
+  <link rel="icon" type="image/svg+xml" th:href="@{/img/AppLogoMini.svg}">
+  <link rel="stylesheet" th:href="@{/css/worksystem.css}">
+  <!-- 페이지 이동 화면 전환 오류 정리 — 첫 화면 그리기 전에 실행돼야 해서 head 에 둔다 -->
+  <script th:src="@{/js/worksystem-view-transition.js}"></script>
+</head>
+<body>
+<div class="app">
+  <div th:replace="~{fragments/app :: sidebar}"></div>
+  <main>
+    <div th:replace="~{fragments/app :: topbar}"></div>
+    <div class="content admin-page">
+      <div class="banner err" th:if="${error}" th:text="${error}"></div>
+      <div class="admin-title-row">
+        <div>
+          <h2>직원 등록</h2>
+        </div>
+        <a class="btn" th:href="@{/admin/users}">목록으로</a>
+      </div>
+
+      <form class="admin-form-panel" th:action="@{/admin/users}" method="post">
+        <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+        <div class="form-section-title">계정 정보</div>
+        <div class="admin-form-grid">
+          <div class="field"><label for="username">로그인 ID</label><input id="username" name="username" required></div>
+          <div class="field"><label for="employeeNumber">사번</label><input id="employeeNumber" name="employeeNumber" placeholder="예: EMP-00001"></div>
+          <div class="field"><label for="name">이름</label><input id="name" name="name" required></div>
+          <div class="field"><label for="hireDate">입사일</label><input id="hireDate" name="hireDate" type="date"></div>
+          <div class="field">
+            <label for="gradeId">직급</label>
+            <select id="gradeId" name="gradeId">
+              <option value="" selected>미지정</option>
+              <option th:each="g : ${grades}" th:value="${g.id}" th:text="${g.name}">1급</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-section-title">소속 정보</div>
+        <div class="admin-form-grid">
+          <div class="field">
+            <label for="teamId">소속 (팀/본부)</label>
+            <select id="teamId" name="teamId" required>
+              <option th:each="team : ${teams}" th:value="${team.id}"
+                      th:text="${team.nodeType == 'DIVISION' ? team.name + ' (본부)' : team.name}">팀</option>
+            </select>
+          </div>
+          <div class="field"><label for="dept">부서/직무</label><input id="dept" name="dept" required></div>
+          <input type="hidden" name="_leader" value="on">
+          <label class="check-label switch-label span-2">
+            <input type="checkbox" name="leader" value="true">
+            <span class="switch-ui" aria-hidden="true"></span><span class="switch-text">해당 팀의 팀장으로 지정</span>
+          </label>
+        </div>
+
+        <div class="form-section-title">연락처 및 업무</div>
+        <div class="admin-form-grid">
+          <div class="field"><label for="extensionNumber">내선번호</label><input id="extensionNumber" name="extensionNumber"></div>
+          <div class="field"><label for="mobileNumber">핸드폰번호</label><input id="mobileNumber" name="mobileNumber"></div>
+          <div class="field"><label for="jobTitle">담당업무</label><input id="jobTitle" name="jobTitle"></div>
+          <div class="field"><label for="email">이메일</label><input id="email" name="email" type="email"></div>
+        </div>
+
+        <div class="form-actions">
+          <span class="muted">초기 비밀번호는 관리자가 안전한 경로로 별도 전달합니다.</span>
+          <div>
+            <a class="btn" th:href="@{/admin/users}">취소</a>
+            <button class="btn primary" type="submit">등록</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </main>
+</div>
+</body>
+</html>

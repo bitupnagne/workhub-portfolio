@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title th:text="${title}">HR 운영 점검</title>
+  <link rel="icon" type="image/svg+xml" th:href="@{/img/AppLogoMini.svg}">
+  <link rel="stylesheet" th:href="@{/css/worksystem.css}">
+  <!-- 페이지 이동 화면 전환 오류 정리 — 첫 화면 그리기 전에 실행돼야 해서 head 에 둔다 -->
+  <script th:src="@{/js/worksystem-view-transition.js}"></script>
+</head>
+<body>
+<div class="app">
+  <div th:replace="~{fragments/app :: sidebar}"></div>
+  <main>
+    <div th:replace="~{fragments/app :: topbar}"></div>
+    <div class="content admin-page">
+      <div class="banner ok" th:if="${message}" th:text="${message}"></div>
+      <div class="banner err" th:if="${error}" th:text="${error}"></div>
+
+      <div class="stats-grid stats-grid-compact">
+        <div class="stat-card sc-orange">
+          <div class="stat-label">조직 이슈</div>
+          <div class="stat-value sv-orange" th:text="${#lists.size(organizationIssues)}">0</div>
+          <span class="stat-tag st-orange">건</span>
+        </div>
+        <div class="stat-card sc-blue">
+          <div class="stat-label">결재 경로 이슈</div>
+          <div class="stat-value sv-blue" th:text="${#lists.size(routeRuleIssues)}">0</div>
+          <span class="stat-tag st-blue">건</span>
+        </div>
+        <div class="stat-card sc-red">
+          <div class="stat-label">직원 신청 차단</div>
+          <div class="stat-value sv-red" th:text="${#lists.size(routeReadinessIssues)}">0</div>
+          <span class="stat-tag st-red">건</span>
+        </div>
+      </div>
+
+      <section class="section-block">
+        <div class="section-header no-caret">
+          <div class="section-left"><span class="sdot sdot-new"></span><span class="sname">조직장/소속 점검</span><span class="scnt scnt-new" th:text="${#lists.size(organizationIssues)}">0</span></div>
+        </div>
+        <div class="table-scroll">
+          <table class="rt board-table health-table">
+            <thead><tr><th>구분</th><th>대상</th><th>내용</th><th>조치</th></tr></thead>
+            <tbody>
+            <tr class="empty-tr" th:if="${#lists.isEmpty(organizationIssues)}"><td colspan="4">조직장과 직원 소속 이슈가 없습니다.</td></tr>
+            <tr th:each="issue : ${organizationIssues}" th:classappend="${issue.severity == 'danger'} ? ' row-danger' : ' row-warn'">
+              <td><span class="status-pill" th:classappend="${issue.severity == 'danger'} ? ' danger' : ''" th:text="${issue.category}">조직장</span></td>
+              <td th:text="${issue.target}">대상</td>
+              <td class="health-message" th:text="${issue.message}">내용</td>
+              <td><a class="rbtn acc" th:href="@{${issue.actionUrl}}">수정</a></td>
+            </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="section-block">
+        <div class="section-header no-caret">
+          <div class="section-left"><span class="sdot sdot-cont"></span><span class="sname">결재 경로 설정 점검</span><span class="scnt scnt-cont" th:text="${#lists.size(routeRuleIssues)}">0</span></div>
+        </div>
+        <div class="table-scroll">
+          <table class="rt board-table health-table">
+            <thead><tr><th>문서</th><th>신청자 직책</th><th>내용</th><th>조치</th></tr></thead>
+            <tbody>
+            <tr class="empty-tr" th:if="${#lists.isEmpty(routeRuleIssues)}"><td colspan="4">결재 경로 설정 이슈가 없습니다.</td></tr>
+            <tr th:each="issue : ${routeRuleIssues}" th:classappend="${issue.severity == 'danger'} ? ' row-danger' : ' row-warn'">
+              <td><span class="cycle-badge" th:text="${issue.documentType}">휴가</span></td>
+              <td th:text="${issue.requesterLevel}">직원</td>
+              <td class="health-message" th:text="${issue.message}">내용</td>
+              <td><a class="rbtn acc" th:href="@{${issue.actionUrl}}">경로 수정</a></td>
+            </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="section-block">
+        <div class="section-header no-caret">
+          <div class="section-left"><span class="sdot sdot-done"></span><span class="sname">직원별 신청 가능 점검</span><span class="scnt scnt-done" th:text="${#lists.size(routeReadinessIssues)}">0</span></div>
+        </div>
+        <div class="table-scroll">
+          <table class="rt board-table health-table">
+            <thead><tr><th>직원</th><th>소속</th><th>문서</th><th>차단 사유</th><th>조치</th></tr></thead>
+            <tbody>
+            <tr class="empty-tr" th:if="${#lists.isEmpty(routeReadinessIssues)}"><td colspan="5">현재 활성 직원의 HR 신청 차단 이슈가 없습니다.</td></tr>
+            <tr th:each="issue : ${routeReadinessIssues}" class="row-danger">
+              <td th:text="${issue.employeeName}">직원</td>
+              <td th:text="${issue.teamName}">소속</td>
+              <td><span class="cycle-badge" th:text="${issue.documentType}">휴가</span></td>
+              <td class="health-message" th:text="${issue.message}">사유</td>
+              <td><a class="rbtn acc" th:href="@{${issue.actionUrl}}">직원 확인</a></td>
+            </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </main>
+</div>
+</body>
+</html>

@@ -1,0 +1,33 @@
+# 운영 프로필 — SPRING_PROFILES_ACTIVE=prod 로 활성화.
+# (systemd unit Environment에 추가하거나 명령행 --spring.profiles.active=prod)
+#
+# 차이점:
+#  - Thymeleaf 캐시 ON (페이지 렌더링 속도 ↑)
+#  - 로깅 레벨 INFO (DEBUG 로그 노이즈 제거 + 디스크 절약)
+#  - Actuator health/info만 노출 (metrics는 인증된 사용자만)
+
+spring:
+  thymeleaf:
+    cache: true
+
+# [LOG-1] 일별 롤링 + 월별 tar.gz 아카이브 위치(logback-spring.xml / LogArchiveService).
+#   systemd 유닛은 StandardOutput=journal 이어야 한다. append:<같은 파일>이면
+#   writer가 둘이 되어 롤오버 시점에 로그가 유실된다.
+app:
+  log:
+    dir: ${APP_LOG_DIR:/var/log/workhub}
+
+logging:
+  level:
+    com.portfolio.workhub: INFO
+    org.springframework.security: WARN
+    org.flywaydb: INFO
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: when-authorized

@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.portfolio.worksystem.mapper.AdminMenuGrantMapper">
+
+    <sql id="grantColumns">
+        SELECT g.id, g.menu_key, g.grantee_type, g.user_id, g.team_id,
+               u.name AS user_name, ut.name AS user_team_name, u.job_title AS user_job_title, u.active AS user_active,
+               t.name AS team_name, t.leader_user_id, l.name AS leader_name,
+               g.granted_by, gb.name AS granted_by_name, g.created_at
+        FROM admin_menu_grants g
+        LEFT JOIN users u ON u.id = g.user_id
+        LEFT JOIN teams ut ON ut.id = u.team_id
+        LEFT JOIN teams t ON t.id = g.team_id
+        LEFT JOIN users l ON l.id = t.leader_user_id
+        LEFT JOIN users gb ON gb.id = g.granted_by
+    </sql>
+
+    <select id="findAll" resultType="AdminMenuGrant">
+        <include refid="grantColumns"/>
+        ORDER BY g.menu_key, g.grantee_type DESC, COALESCE(t.name, u.name)
+    </select>
+
+    <select id="findById" resultType="AdminMenuGrant">
+        <include refid="grantColumns"/>
+        WHERE g.id = #{id}
+    </select>
+
+    <select id="findMenuKeysForUser" resultType="java.lang.String">
+        SELECT DISTINCT g.menu_key
+        FROM admin_menu_grants g
+        LEFT JOIN teams t ON t.id = g.team_id
+        WHERE (g.grantee_type = 'USER' AND g.user_id = #{userId})
+           OR (g.grantee_type = 'TEAM_LEADER' AND t.active = 1 AND t.leader_user_id = #{userId})
+    </select>
+
+    <insert id="insert" parameterType="AdminMenuGrant" useGeneratedKeys="true" keyProperty="id">
+        INSERT IGNORE INTO admin_menu_grants(menu_key, grantee_type, user_id, team_id, granted_by)
+        VALUES(#{menuKey}, #{granteeType}, #{userId}, #{teamId}, #{grantedBy})
+    </insert>
+
+    <delete id="delete">
+        DELETE FROM admin_menu_grants WHERE id = #{id}
+    </delete>
+
+    <insert id="insertLog">
+        INSERT INTO admin_menu_grant_logs(menu_key, action, grantee_type, user_id, team_id, grantee_label, actor_id, actor_name)
+        VALUES(#{menuKey}, #{action}, #{granteeType}, #{userId}, #{teamId}, #{granteeLabel}, #{actorId}, #{actorName})
+    </insert>
+</mapper>

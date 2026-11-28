@@ -1,0 +1,55 @@
+<div id="modalLayer" class="modal-backdrop" hidden>
+  <div id="modalShell" class="otp-shell">
+    <section id="authModal" data-od-id="otp-authentication-modal" class="modal-box" role="dialog" aria-modal="true" aria-labelledby="otpTitle" hidden>
+      <button class="modal-close" type="button" data-close="close" aria-label="인증 모달 닫기"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      <div class="otp-header"><img class="otp-logo" alt="Office Suite" width="211" height="30"><h2 id="otpTitle" data-od-id="otp-authentication-heading" class="modal-title">2차 인증</h2></div>
+      <p id="otpDescription" class="otp-desc">인증 앱의 <b>6자리 코드</b>를 입력하세요. 6자리를 입력하면 자동으로 검증됩니다.</p>
+      <div class="otp-install app-download-install"><p class="app-download-title">Google Authenticator 설치</p><div class="app-download-grid"><a class="app-download-button" data-download="android" data-mode="auth" target="_blank" rel="noopener noreferrer" aria-label="Android Google Authenticator Google Play 다운로드, 새 탭"><svg class="store-icon" viewBox="0 0 28 30" aria-hidden="true" focusable="false"><path fill="#4285F4" d="M2 1.2 17.4 15 2 28.8c-.8-.5-1-1.2-1-2.3v-23C1 2.4 1.2 1.7 2 1.2Z"/><path fill="#34A853" d="M2 1.2c.6-.4 1.4-.3 2.4.3L21 10.8 17.4 15Z"/><path fill="#EA4335" d="m17.4 15 3.6 4.2-16.6 9.3c-1 .6-1.8.7-2.4.3Z"/><path fill="#FBBC04" d="m21 10.8 5.1 2.8c1.6.8 1.6 2 0 2.8L21 19.2 17.4 15Z"/></svg><span class="download-label"><b>Android</b><span>Google Play</span></span><svg class="download-external" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M14 5h5v5M19 5l-9 9M19 14v5H5V5h5"/></svg></a><a class="app-download-button" data-download="ios" data-mode="auth" target="_blank" rel="noopener noreferrer" aria-label="iOS Google Authenticator App Store 다운로드, 새 탭"><svg class="store-icon" viewBox="0 0 30 30" aria-hidden="true" focusable="false"><rect width="30" height="30" rx="7" fill="#0A84FF"/><g fill="none" stroke="#fff" stroke-width="2.7" stroke-linecap="round"><path d="m17.6 7.4-9 15.2M12.6 7.4l7.8 13.2M6.7 19.2h16.6"/></g></svg><span class="download-label"><b>iOS</b><span>App Store</span></span><svg class="download-external" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M14 5h5v5M19 5l-9 9M19 14v5H5V5h5"/></svg></a></div></div>
+      <div class="otp-sync-row"><span class="otp-sync-left"><i class="otp-sync-dot" aria-hidden="true"></i><span>현재 KST <time id="otpKstClock" data-od-id="otp-current-kst" class="otp-kst-clock">--:--:--</time></span></span><span class="otp-sync-right">코드 갱신까지 <b id="otpTimerSec" class="otp-timer-sec">--</b>초</span></div><div class="otp-timer-track" aria-hidden="true"><i id="otpTimerBar" class="otp-timer-bar"></i></div>
+      <div id="otpErr" class="otp-err" role="alert"></div><div id="otpBoxes" data-od-id="otp-authentication-code" class="otp-code-wrap"></div>
+      <div class="otp-actions"><button id="cancelAuth" class="btn btn-ghost" type="button">취소</button></div>
+    </section>
+    <section id="setupModal" data-od-id="otp-registration-modal" class="modal-box" role="dialog" aria-modal="true" aria-labelledby="setupTitle" hidden>
+      <button class="modal-close" type="button" data-close="close" aria-label="등록 모달 닫기"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      <div class="otp-header"><img class="otp-logo" alt="Office Suite" width="211" height="30"><h2 id="setupTitle" data-od-id="otp-registration-heading" class="modal-title">2차 인증(OTP) 등록</h2></div>
+      <ol class="wizard-progress" aria-label="등록 단계">
+        <li data-step-indicator="1" aria-current="step"><button class="wizard-step" type="button" data-od-id="wizard-step-install" data-wizard-step="1" aria-disabled="true"><span>1</span>설치 확인</button></li><li data-step-indicator="2"><button class="wizard-step" type="button" data-od-id="wizard-step-app-setup" data-wizard-step="2" aria-disabled="true"><span>2</span>앱 설정</button></li><li data-step-indicator="3"><button class="wizard-step" type="button" data-od-id="wizard-step-code-check" data-wizard-step="3" aria-disabled="true"><span>3</span>코드 확인</button></li>
+      </ol>
+      <p id="wizardNavHint" class="wizard-nav-hint">완료한 단계는 상단에서 다시 선택할 수 있어요.</p>
+      <p id="wizardNavFeedback" class="wizard-nav-feedback" role="status" aria-live="polite" hidden></p>
+      <div id="setupStep1" class="wizard-pane" data-setup-step="1">
+        <div id="installQuestion" class="install-question">
+          <h3 id="setupStep1Title" class="wizard-title" tabindex="-1">스마트폰에 구글 OTP가<br>설치되어 있나요?</h3>
+          <p class="wizard-description">Google Authenticator 앱이 필요합니다.</p>
+          <div class="wizard-choice-row"><button id="installedYes" class="btn btn-primary" type="button" aria-pressed="false">예, 설치되어 있어요</button><button id="installedNo" class="btn btn-ghost" type="button" aria-pressed="false" aria-controls="installHelp" aria-expanded="false">아니오</button></div>
+        </div>
+        <div id="installHelp" class="install-help" hidden>
+          <div class="otp-install app-download-install"><p class="app-download-title">Google Authenticator 설치</p><div class="app-download-grid"><a class="app-download-button" data-download="android" data-mode="setup" target="_blank" rel="noopener noreferrer" aria-label="Android Google Authenticator Google Play 다운로드, 새 탭"><svg class="store-icon" viewBox="0 0 28 30" aria-hidden="true" focusable="false"><path fill="#4285F4" d="M2 1.2 17.4 15 2 28.8c-.8-.5-1-1.2-1-2.3v-23C1 2.4 1.2 1.7 2 1.2Z"/><path fill="#34A853" d="M2 1.2c.6-.4 1.4-.3 2.4.3L21 10.8 17.4 15Z"/><path fill="#EA4335" d="m17.4 15 3.6 4.2-16.6 9.3c-1 .6-1.8.7-2.4.3Z"/><path fill="#FBBC04" d="m21 10.8 5.1 2.8c1.6.8 1.6 2 0 2.8L21 19.2 17.4 15Z"/></svg><span class="download-label"><b>Android</b><span>Google Play</span></span><svg class="download-external" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M14 5h5v5M19 5l-9 9M19 14v5H5V5h5"/></svg></a><a class="app-download-button" data-download="ios" data-mode="setup" target="_blank" rel="noopener noreferrer" aria-label="iOS Google Authenticator App Store 다운로드, 새 탭"><svg class="store-icon" viewBox="0 0 30 30" aria-hidden="true" focusable="false"><rect width="30" height="30" rx="7" fill="#0A84FF"/><g fill="none" stroke="#fff" stroke-width="2.7" stroke-linecap="round"><path d="m17.6 7.4-9 15.2M12.6 7.4l7.8 13.2M6.7 19.2h16.6"/></g></svg><span class="download-label"><b>iOS</b><span>App Store</span></span><svg class="download-external" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M14 5h5v5M19 5l-9 9M19 14v5H5V5h5"/></svg></a></div></div>
+          <div class="install-actions" data-od-id="install-actions">
+            <button id="installConfirm" data-od-id="install-complete" class="btn btn-primary" type="button">설치 완료</button>
+          </div>
+        </div>
+      </div>
+      <div id="setupStep2" class="wizard-pane" data-setup-step="2" hidden>
+        <h3 id="setupStep2Title" class="wizard-title" tabindex="-1">앱에 계정을 추가해 주세요</h3>
+        <p class="wizard-description">Google Authenticator의 오른쪽 아래 <b>＋</b>를 누르고 등록 방법을 선택하세요.</p>
+        <div class="wizard-methods" aria-label="OTP 등록 방법">
+          <button id="chooseQr" class="method-choice" type="button" aria-pressed="false" aria-controls="qrMethod"><b>QR 코드 스캔</b><span>카메라로 등록하기</span></button>
+          <button id="chooseManual" class="method-choice" type="button" aria-pressed="false" aria-controls="manualMethod"><b>설정 키 입력</b><span>키를 직접 넣어 등록하기</span></button>
+        </div>
+        <p id="methodHint" class="wizard-hint">지금 스마트폰 한 대로 보고 있다면 설정 키 입력이 편리합니다.</p>
+        <div id="qrMethod" class="method-content" hidden><div class="setup-qr-box"><img id="setupQr" width="180" height="180" alt="Google Authenticator 계정 등록 QR 코드"></div><p class="wizard-hint">앱에서 “QR 코드 스캔”을 선택해 위 코드를 스캔하세요.<br>계정 이름: <b data-account></b></p></div>
+        <div id="manualMethod" class="method-content" hidden><p class="otp-meta">앱에서 “설정 키 입력”을 선택하세요.<br>계정 이름: <b data-account></b><br>아래 설정 키를 입력하고 키 유형은 <b>시간 기반</b>으로 선택하세요.</p><div class="key-grid"><input id="otpKey" class="form-input" readonly aria-label="OTP 수동 설정 키"><button id="copyKey" class="btn btn-ghost copy-btn" type="button">복사</button></div>
+          <p id="copyFeedback" class="copy-feedback" role="status"></p><p class="otp-meta">키 유형: <b>시간 기반</b> · SHA1 · 6자리 · <span data-period></span>초</p></div>
+      </div>
+      <div id="setupStep3" class="wizard-pane" data-setup-step="3" hidden>
+        <h3 id="setupStep3Title" class="wizard-title" tabindex="-1">마지막으로 코드를 확인할게요</h3>
+        <p id="setupDescription" class="wizard-description">등록한 OTP의 <b>6자리 코드</b>를 입력하면 최종 등록이 완료됩니다.</p>
+        <div id="setupTimer"><div class="otp-sync-row"><span class="otp-sync-left"><i class="otp-sync-dot" aria-hidden="true"></i><span>현재 KST <time id="setupKstClock" data-od-id="setup-current-kst" class="otp-kst-clock">--:--:--</time></span></span><span class="otp-sync-right">코드 갱신까지 <b id="setupTimerSec" class="otp-timer-sec">--</b>초</span></div><div class="otp-timer-track" aria-hidden="true"><i id="setupTimerBar" class="otp-timer-bar"></i></div></div>
+        <div id="setupErr" class="otp-err" role="alert"></div><div id="otpSetupBoxes" data-od-id="otp-registration-code" class="otp-code-wrap"></div>
+        <p id="setupSuccess" class="setup-success" hidden>OTP 등록이 완료되었습니다.</p>
+      </div>
+      <div class="otp-actions wizard-actions"><button id="setupNext" class="btn btn-primary" type="button" hidden disabled>설정 완료</button><button id="cancelSetup" class="btn btn-ghost" type="button" hidden>취소</button></div>
+    </section>
+  </div>
+</div>

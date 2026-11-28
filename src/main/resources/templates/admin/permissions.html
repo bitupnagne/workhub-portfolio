@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title th:text="${title}">관리자 권한 관리</title>
+  <link rel="icon" type="image/svg+xml" th:href="@{/img/AppLogoMini.svg}">
+  <link rel="stylesheet" th:href="@{/css/worksystem.css}">
+  <!-- 페이지 이동 화면 전환 오류 정리 — 첫 화면 그리기 전에 실행돼야 해서 head 에 둔다 -->
+  <script th:src="@{/js/worksystem-view-transition.js}"></script>
+</head>
+<body>
+<div class="app">
+  <div th:replace="~{fragments/app :: sidebar}"></div>
+  <main>
+    <div th:replace="~{fragments/app :: topbar}"></div>
+    <div class="content admin-page" data-perm-page>
+      <input type="hidden" data-perm-csrf th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+
+      <div class="admin-title-row">
+        <div><h2>관리자 권한 관리</h2></div>
+      </div>
+
+      <section class="section-block" th:each="entry : ${menuGroups}">
+        <div class="section-header no-caret">
+          <div class="section-left">
+            <span class="sdot sdot-new"></span>
+            <span class="sname" th:text="${entry.key}">조직 관리</span>
+            <span class="scnt" th:text="${#lists.size(entry.value)}">0</span>
+          </div>
+        </div>
+        <div class="perm-list">
+          <div class="perm-menu" th:each="row : ${entry.value}"
+               data-disclosure th:attr="data-perm-menu=${row.menu.key},data-perm-label=${row.menu.label},data-perm-grantable=${row.grantable}">
+            <div class="perm-head" data-disclosure-head>
+              <span class="perm-name" th:text="${row.menu.label}">메뉴</span>
+              <span class="perm-url" th:text="${row.menu.url}">/admin</span>
+              <span class="perm-count" data-perm-count th:text="|${#lists.size(row.grants)}건|">0건</span>
+              <span class="perm-lock" th:if="${row.lockReason != null}" th:text="${row.lockReason}">잠김</span>
+            </div>
+            <div class="perm-body" data-disclosure-body><div class="perm-body-inner"><div class="perm-body-pad">
+              <div class="perm-body-top">
+                <span class="muted">슈퍼관리자는 항상 사용 가능</span>
+                <button class="rbtn acc" type="button" data-perm-open th:if="${row.grantable}">권한 주기</button>
+              </div>
+              <div class="perm-chips" data-perm-chips>
+                <span class="perm-chip" th:each="g : ${row.grants}"
+                      th:classappend="${g.leaderSeat} ? 'is-seat' : ''"
+                      th:attr="data-grant-id=${g.id},data-type=${g.granteeType},data-target-id=${g.leaderSeat ? g.teamId : g.userId}">
+                  <b th:text="${g.label}">이름</b>
+                  <small th:text="${g.detail}">소속</small>
+                </span>
+                <span class="perm-empty" th:if="${#lists.isEmpty(row.grants)}">아직 권한을 받은 사람이 없습니다.</span>
+              </div>
+            </div></div></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 권한 주기 모달 — 메뉴마다 같은 틀을 쓴다. -->
+      <div class="perm-modal-backdrop" data-perm-modal hidden>
+        <div class="perm-modal" role="dialog" aria-modal="true" aria-labelledby="permModalTitle">
+          <div class="perm-modal-head">
+            <strong id="permModalTitle" data-perm-modal-title>권한 주기</strong>
+            <button type="button" class="perm-x" data-perm-close aria-label="닫기"><svg th:replace="~{fragments/icons :: i('close')}"></svg></button>
+          </div>
+          <div class="perm-modal-granted">
+            <div class="perm-sub">이미 권한을 받은 사람·자리 <span class="muted">칩 오른쪽 닫기 버튼으로 회수</span></div>
+            <div class="perm-chips" data-perm-modal-chips></div>
+          </div>
+          <div class="perm-pickers">
+            <div class="perm-picker">
+              <div class="perm-sub">조직장 자리로 주기</div>
+              <input type="search" class="form-input" placeholder="조직 이름 검색" data-perm-search="seat" aria-label="조직 검색">
+              <ul class="perm-options" data-perm-options="seat">
+                <li th:each="t : ${leaderSeats}">
+                  <button type="button" class="perm-option" data-perm-pick="TEAM_LEADER"
+                          th:attr="data-target-id=${t.id},data-label=|${t.name} 조직장|,data-search=${t.name}">
+                    <b th:text="|${t.name} 조직장|">조직 조직장</b>
+                    <small th:text="${t.leaderName == null ? '공석' : '현재 ' + t.leaderName}">현재 홍길동</small>
+                  </button>
+                </li>
+              </ul>
+            </div>
+            <div class="perm-picker">
+              <div class="perm-sub">직원에게 주기</div>
+              <input type="search" class="form-input" placeholder="이름·소속 검색" data-perm-search="user" aria-label="직원 검색">
+              <ul class="perm-options" data-perm-options="user">
+                <li th:each="u : ${candidates}">
+                  <button type="button" class="perm-option" data-perm-pick="USER"
+                          th:attr="data-target-id=${u.id},data-label=${u.name},data-search=|${u.name} ${u.detail}|">
+                    <b th:text="${u.name}">이름</b>
+                    <small th:text="${u.detail}">소속</small>
+                  </button>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+<script th:src="@{/js/worksystem-permissions.js}"></script>
+</body>
+</html>

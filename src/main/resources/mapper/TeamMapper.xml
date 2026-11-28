@@ -1,0 +1,170 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.portfolio.worksystem.mapper.TeamMapper">
+
+    <select id="findAll" resultType="Team">
+        SELECT t.id, t.code, t.name, t.parent_id, t.node_type, t.leader_user_id, leader.name AS leader_name,
+               t.display_order, t.active, t.weekly_report_target
+        FROM teams t
+        LEFT JOIN users leader ON leader.id = t.leader_user_id
+        WHERE t.active = TRUE
+          AND t.node_type = 'TEAM'
+        ORDER BY t.display_order, t.name
+    </select>
+
+    <select id="findAllNodes" resultType="Team">
+        WITH RECURSIVE org_tree AS (
+            SELECT id, code, name, parent_id, node_type, leader_user_id, display_order, active, weekly_report_target,
+                   0 AS level,
+                   CAST(CONCAT(LPAD(display_order, 4, '0'), '-', LPAD(id, 6, '0')) AS CHAR(1000)) AS sort_path,
+                   CAST(name AS CHAR(1000)) AS path
+            FROM teams
+            WHERE active = TRUE
+              AND parent_id IS NULL
+            UNION ALL
+            SELECT child.id, child.code, child.name, child.parent_id, child.node_type, child.leader_user_id, child.display_order, child.active, child.weekly_report_target,
+                   parent.level + 1 AS level,
+                   CAST(CONCAT(parent.sort_path, '.', LPAD(child.display_order, 4, '0'), '-', LPAD(child.id, 6, '0')) AS CHAR(1000)) AS sort_path,
+                   CAST(CONCAT(parent.path, ' > ', child.name) AS CHAR(1000)) AS path
+            FROM teams child
+            JOIN org_tree parent ON parent.id = child.parent_id
+            WHERE child.active = TRUE
+        )
+        SELECT org_tree.id, org_tree.code, org_tree.name, org_tree.parent_id, parent.name AS parent_name,
+               org_tree.node_type, org_tree.leader_user_id, leader.name AS leader_name,
+               org_tree.display_order, org_tree.level, org_tree.path, org_tree.active, org_tree.weekly_report_target
+        FROM org_tree
+        LEFT JOIN teams parent ON parent.id = org_tree.parent_id
+        LEFT JOIN users leader ON leader.id = org_tree.leader_user_id
+        ORDER BY org_tree.sort_path
+    </select>
+
+    <select id="findAncestors" resultType="Team">
+        WITH RECURSIVE ancestors AS (
+            SELECT id, code, name, parent_id, node_type, leader_user_id, display_order, active, 0 AS level
+            FROM teams
+            WHERE id = #{teamId}
+            UNION ALL
+            SELECT parent.id, parent.code, parent.name, parent.parent_id, parent.node_type,
+                   parent.leader_user_id, parent.display_order, parent.active, ancestors.level + 1 AS level
+            FROM ancestors
+            JOIN teams parent ON parent.id = ancestors.parent_id
+            WHERE parent.active = TRUE
+        )
+        SELECT ancestors.id, ancestors.code, ancestors.name, ancestors.parent_id, parent.name AS parent_name,
+               ancestors.node_type, ancestors.leader_user_id, leader.name AS leader_name,
+               ancestors.display_order, ancestors.level, ancestors.active
+        FROM ancestors
+        LEFT JOIN teams parent ON parent.id = ancestors.parent_id
+        LEFT JOIN users leader ON leader.id = ancestors.leader_user_id
+        ORDER BY ancestors.level
+    </select>
+
+    <select id="findById" resultType="Team">
+        SELECT t.id, t.code, t.name, t.parent_id, t.node_type, t.leader_user_id, leader.name AS leader_name,
+               t.display_order, t.active
+        FROM teams t
+        LEFT JOIN users leader ON leader.id = t.leader_user_id
+        WHERE t.id = #{id}
+    </select>
+
+    <select id="findTopLedNonTeam" resultType="Team">
+        SELECT t.id, t.code, t.name, t.parent_id, t.node_type, t.leader_user_id, leader.name AS leader_name,
+               t.display_order, t.active
+        FROM teams t
+        LEFT JOIN users leader ON leader.id = t.leader_user_id
+        WHERE t.leader_user_id = #{userId}
+          AND t.node_type IN ('DIVISION', 'ROOT')
+          AND t.active = TRUE
+        ORDER BY FIELD(t.node_type, 'ROOT', 'DIVISION'), t.id
+        LIMIT 1
+    </select>
+
+    <select id="findByCode" resultType="Team">
+        SELECT t.id, t.code, t.name, t.parent_id, t.node_type, t.leader_user_id, leader.name AS leader_name,
+               t.display_order, t.active
+        FROM teams t
+        LEFT JOIN users leader ON leader.id = t.leader_user_id
+        WHERE t.code = #{code}
+    </select>
+
+    <select id="getSetting" resultType="string">
+        SELECT setting_value
+        FROM app_settings
+        WHERE setting_key = #{key}
+    </select>
+
+    <insert id="setSetting">
+        INSERT INTO app_settings(setting_key, setting_value)
+        VALUES(#{key}, #{value})
+        ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)
+    </insert>
+
+    <insert id="insertTeam" parameterType="Team" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO teams(code, name, parent_id, node_type, display_order)
+        VALUES(
+            #{code},
+            #{name},
+            #{parentId},
+            #{nodeType},
+            (
+                SELECT COALESCE(MAX(t.display_order), 0) + 1
+                FROM teams t
+                WHERE COALESCE(t.parent_id, 0) = COALESCE(#{parentId}, 0)
+            )
+        )
+    </insert>
+
+    <select id="countActiveChildren" resultType="int">
+        SELECT COUNT(*)
+        FROM teams
+        WHERE parent_id = #{teamId}
+          AND active = TRUE
+    </select>
+
+    <update id="updateTeamLeader">
+        UPDATE teams
+        SET leader_user_id = #{leaderUserId}
+        WHERE id = #{teamId}
+    </update>
+
+    <update id="updateTeamName">
+        UPDATE teams
+        SET name = #{name}
+        WHERE id = #{teamId}
+    </update>
+
+    <update id="updateWeeklyReportTarget">
+        UPDATE teams
+        SET weekly_report_target = #{target}
+        WHERE id = #{teamId}
+    </update>
+
+
+    <update id="clearLeaderByUserId">
+        UPDATE teams
+        SET leader_user_id = NULL
+        WHERE leader_user_id = #{userId}
+    </update>
+
+    <update id="deactivateTeam">
+        UPDATE teams
+        SET active = FALSE,
+            leader_user_id = NULL
+        WHERE id = #{teamId}
+    </update>
+
+    <delete id="updateTeamLeaderRole">
+        DELETE ur FROM user_roles ur
+        JOIN users u ON u.id = ur.user_id
+        WHERE u.team_id = #{teamId}
+          AND ur.role_code = 'TEAM_LEADER'
+          AND (#{leaderUserId} IS NULL OR ur.user_id != #{leaderUserId})
+    </delete>
+
+    <update id="updateDisplayOrder">
+        UPDATE teams
+        SET display_order = #{displayOrder}
+        WHERE id = #{teamId}
+    </update>
+</mapper>

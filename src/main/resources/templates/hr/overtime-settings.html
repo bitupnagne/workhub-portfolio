@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title th:text="${title}">시간외 근무 설정</title>
+  <link rel="icon" type="image/svg+xml" th:href="@{/img/AppLogoMini.svg}">
+  <link rel="stylesheet" th:href="@{/css/worksystem.css}">
+  <!-- 페이지 이동 화면 전환 오류 정리 — 첫 화면 그리기 전에 실행돼야 해서 head 에 둔다 -->
+  <script th:src="@{/js/worksystem-view-transition.js}"></script>
+</head>
+<body>
+<div class="app">
+  <div th:replace="~{fragments/app :: sidebar}"></div>
+  <main>
+    <div th:replace="~{fragments/app :: topbar}"></div>
+    <div class="content admin-page">
+      <div class="banner ok" th:if="${message}" th:text="${message}"></div>
+      <div class="banner err" th:if="${error}" th:text="${error}"></div>
+
+      <section class="form-panel">
+        <div class="form-head">
+          <div>
+            <h2>가산율과 야간 시간대</h2>
+            <p>가산율은 <b>통상시급 × N</b>의 N 입니다. 야간은 다른 구분에 <b>더해지는 추가분</b>입니다
+              (연장 1.5 + 야간 0.5 = 2.0). 통상시급은 <a href="/admin/payroll">급여 관리</a>의 직급별 값을 씁니다. 아래 '1일 기준 시간'은 연차수당 1일 = 통상시급 × 기준 시간에 씁니다.</p>
+          </div>
+          <a class="rbtn" th:href="@{/hr/overtime}">시간외 근무</a>
+        </div>
+        <form class="stack-form" th:action="@{/hr/overtime/settings}" method="post" th:object="${overtimeSetting}">
+          <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+          <fieldset class="plain-fieldset" th:disabled="${!canManageHr}">
+            <div class="form-grid two">
+              <label class="field">야간 시작
+                <input type="time" name="nightStart" th:value="${#temporals.format(overtimeSetting.nightStart, 'HH:mm')}" required>
+              </label>
+              <label class="field">야간 종료
+                <input type="time" name="nightEnd" th:value="${#temporals.format(overtimeSetting.nightEnd, 'HH:mm')}" required>
+              </label>
+            </div>
+            <div class="form-grid two">
+              <label class="field">연장 (평일)
+                <input type="number" name="rateExtended" th:value="*{rateExtended}" min="0" max="9.99" step="0.01" required>
+              </label>
+              <label class="field">야간 추가분
+                <input type="number" name="rateNight" th:value="*{rateNight}" min="0" max="9.99" step="0.01" required>
+              </label>
+              <label class="field">휴일
+                <input type="number" name="rateHoliday" th:value="*{rateHoliday}" min="0" max="9.99" step="0.01" required>
+              </label>
+              <label class="field">휴일 초과분
+                <input type="number" name="rateHolidayOver" th:value="*{rateHolidayOver}" min="0" max="9.99" step="0.01" required>
+              </label>
+              <label class="field">공휴일
+                <input type="number" name="ratePublicHoliday" th:value="*{ratePublicHoliday}" min="0" max="9.99" step="0.01" required>
+              </label>
+              <label class="field">근로자의 날
+                <input type="number" name="rateLaborDay" th:value="*{rateLaborDay}" min="0" max="9.99" step="0.01" required>
+              </label>
+              <label class="field">휴일 초과 기준(시간)
+                <input type="number" name="holidayOverHours" th:value="*{holidayOverHours}" min="1" max="24" step="1" required>
+              </label>
+              <label class="field">주 최대 근로시간
+                <input type="number" name="weeklyLimitHours" th:value="*{weeklyLimitHours}" min="1" max="168" step="1" required>
+              </label>
+              <label class="field">1일 기준 시간(연차수당)
+                <input type="number" name="dailyStandardHours" th:value="*{dailyStandardHours}" min="1" max="24" step="1" required>
+              </label>
+              <label class="field">미신청 안내 기준(분)
+                <input type="number" name="noticeThresholdMinutes" th:value="*{noticeThresholdMinutes}" min="1" max="600" step="1" required>
+              </label>
+            </div>
+            <p class="muted">휴일·공휴일·근로자의 날 근무가 '휴일 초과 기준' 시간을 넘으면 넘은 부분에 휴일 초과분 가산율을 씁니다.
+              주 최대 근로시간을 넘는 신청은 막지 않고 경고합니다.</p>
+            <button class="btn primary" type="submit" th:if="${canManageHr}">저장</button>
+          </fieldset>
+        </form>
+      </section>
+
+      <section class="section-block">
+        <div class="section-header no-caret">
+          <div class="section-left">
+            <span class="sdot sdot-new"></span>
+            <span class="sname">조별 기준</span>
+            <span class="scnt scnt-new" th:text="${#lists.size(groupRules)}">1</span>
+          </div>
+        </div>
+        <form th:action="@{/hr/overtime/settings/groups}" method="post">
+          <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+          <div class="table-scroll">
+            <table class="rt board-table">
+              <thead>
+              <tr><th>조</th><th>연장 기준(시간)</th><th>포괄 인정(월, 시간)</th><th>상태</th></tr>
+              </thead>
+              <tbody>
+              <tr th:each="rule : ${groupRules}">
+                <td>
+                  <input type="hidden" name="groupCode" th:value="${rule.groupCode}">
+                  <span th:text="${rule.groupLabel}">기본 근무</span>
+                </td>
+                <td><input class="mini-input" type="number" name="extendedAfterHours" th:value="${rule.extendedAfterHours}"
+                           min="0.5" max="24" step="0.5" th:disabled="${!canManageHr}" required aria-label="연장 기준 시간"></td>
+                <td><input class="mini-input" type="number" name="inclusiveMonthlyHours" th:value="${rule.inclusiveMonthlyHours}"
+                           min="0" max="744" step="0.5" th:disabled="${!canManageHr}" required aria-label="포괄 인정 시간"></td>
+                <td class="muted" th:text="${rule.configured} ? '직접 설정' : '기본 근무 기준 따름'">직접 설정</td>
+              </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="overtime-group-foot">
+            <p class="muted">연장 기준은 하루 실근로가 이 시간을 넘은 부분부터 연장으로 본다는 뜻입니다.
+              포괄 인정은 급여에 이미 들어 있는 월 시간외 시간으로, 이만큼은 추가 지급 대상에서 뺍니다. 조는 근태 설정의 시차출근 조를 따릅니다.</p>
+            <button class="btn primary" type="submit" th:if="${canManageHr}">조별 기준 저장</button>
+          </div>
+        </form>
+      </section>
+    </div>
+  </main>
+</div>
+</body>
+</html>

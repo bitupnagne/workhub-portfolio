@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<body>
+<form th:fragment="projectForm(action, submitLabel)" class="pm-form stack-form" th:action="${action}" method="post" data-project-form>
+  <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+  <div class="pm-form-grid">
+    <label class="field pm-span">프로젝트명 <span class="pm-required">필수</span>
+      <input name="name" th:value="${projectForm.name}" maxlength="160" required placeholder="예: 고객 포털 개편">
+    </label>
+    <label class="field pm-span">목적과 범위
+      <textarea class="form-textarea" name="description" rows="3" maxlength="10000" th:text="${projectForm.description}" placeholder="프로젝트의 목표와 함께 완료할 일을 적어주세요."></textarea>
+    </label>
+    <label class="field">프로젝트 책임자 <span class="pm-required">필수</span>
+      <select name="ownerId" required>
+        <option value="">책임자 선택</option>
+        <option th:each="person : ${people}" th:value="${person.userId}" th:selected="${projectForm.ownerId == person.userId}" th:text="${person.name + (person.teamName != null ? ' · ' + person.teamName : '')}">참여자</option>
+      </select>
+    </label>
+    <label class="field">프로젝트 상태
+      <select name="status">
+        <option value="ACTIVE" th:selected="${projectForm.status == 'ACTIVE'}">진행 중</option>
+        <option value="COMPLETED" th:selected="${projectForm.status == 'COMPLETED'}">완료</option>
+        <option value="ARCHIVED" th:selected="${projectForm.status == 'ARCHIVED'}">보관</option>
+      </select>
+    </label>
+    <label class="field">시작일 <input type="date" name="startDate" th:value="${projectForm.startDate}"></label>
+    <label class="field">목표 완료일 <input type="date" name="dueDate" th:value="${projectForm.dueDate}"></label>
+  </div>
+  <fieldset class="pm-people-field" data-person-picker>
+    <legend>함께할 참여자</legend>
+    <p class="pm-help">프로젝트를 만든 사람과 책임자는 자동으로 참여합니다.</p>
+    <label class="field pm-member-search">참여자 검색 <input type="search" placeholder="이름 또는 팀 검색" data-person-search autocomplete="off"></label>
+    <div class="pm-people-options">
+      <label class="pm-person-option" th:each="person : ${people}" th:attr="data-person-text=${person.name + ' ' + (person.teamName ?: '')}">
+        <input type="checkbox" name="memberIds" th:value="${person.userId}" th:checked="${projectForm.memberIds != null and #lists.contains(projectForm.memberIds, person.userId)}">
+        <span><b th:text="${person.name}">이름</b><small th:text="${person.teamName ?: '소속 미지정'}">팀</small></span>
+      </label>
+    </div>
+    <p class="pm-help" data-person-empty hidden>검색한 참여자가 없습니다.</p>
+  </fieldset>
+  <div class="pm-form-actions"><button class="btn primary" type="submit" th:text="${submitLabel}">저장</button></div>
+</form>
+
+<form th:fragment="taskForm(action, submitLabel, editing)" class="pm-form stack-form" th:action="${action}" method="post" data-project-form data-task-form>
+  <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+  <input th:if="${editing}" type="hidden" name="version" th:value="${taskForm.version}">
+  <div class="pm-form-grid">
+    <label class="field pm-span">업무명 <span class="pm-required">필수</span>
+      <input name="title" th:value="${taskForm.title}" maxlength="200" required placeholder="완료할 업무를 구체적으로 적어주세요.">
+    </label>
+    <label class="field pm-span">업무 설명
+      <textarea class="form-textarea" name="description" rows="4" maxlength="20000" th:text="${taskForm.description}" placeholder="진행할 내용, 완료 기준, 참고할 사항을 적어주세요."></textarea>
+    </label>
+    <label th:unless="${editing}" class="field">책임 담당자 <span class="pm-required">필수</span>
+      <select name="assigneeId" required>
+        <option value="">담당자 선택</option>
+        <option th:each="person : ${members}" th:value="${person.userId}" th:selected="${taskForm.assigneeId == person.userId}" th:text="${person.name + (person.teamName != null ? ' · ' + person.teamName : '')}">참여자</option>
+      </select>
+    </label>
+    <div th:if="${editing}" class="field"><label>책임 담당자</label><p class="pm-readonly" th:text="${task.assigneeName}">담당자</p><input type="hidden" name="assigneeId" th:value="${taskForm.assigneeId}"><p class="pm-help">담당 변경은 아래 인수인계에서 요청하세요.</p></div>
+    <label class="field">완료 예정일 <input type="date" name="dueDate" th:value="${taskForm.dueDate}"></label>
+    <label class="field">업무 상태
+      <select name="status" data-task-status>
+        <option th:each="state : ${taskStatuses}" th:value="${state.name()}" th:selected="${taskForm.status == state}" th:text="${state.label}">예정</option>
+      </select>
+    </label>
+    <label class="field">진척도 (%)
+      <input type="number" name="progress" min="0" max="100" step="1" th:value="${taskForm.progress}" data-task-progress required aria-describedby="pm-progress-help">
+      <small class="pm-help" id="pm-progress-help">예정은 0%, 완료는 100%로 저장됩니다.</small>
+    </label>
+  </div>
+  <fieldset class="pm-people-field"><legend>협업자</legend>
+    <div class="pm-people-options pm-people-compact">
+      <label class="pm-person-option" th:each="person : ${members}">
+        <input type="checkbox" name="collaboratorIds" th:value="${person.userId}" th:checked="${taskForm.collaboratorIds != null and #lists.contains(taskForm.collaboratorIds, person.userId)}">
+        <span><b th:text="${person.name}">이름</b><small th:text="${person.teamName ?: '소속 미지정'}">팀</small></span>
+      </label>
+    </div>
+  </fieldset>
+  <div class="pm-form-actions"><button class="btn primary" type="submit" th:text="${submitLabel}">저장</button></div>
+</form>
+
+<a th:fragment="taskCard(item)" class="pm-task-card" th:href="@{/projects/{pid}/tasks/{tid}(pid=${project.id},tid=${item.id})}">
+  <span class="pm-task-number" th:text="'업무 #' + ${item.id}">업무</span>
+  <h3 th:text="${item.title}">업무 제목</h3>
+  <div class="pm-task-card-meta"><span class="pm-avatar" aria-hidden="true" th:text="${#strings.substring(item.assigneeName,0,1)}">담</span><span th:text="${item.assigneeName}">담당자</span></div>
+  <div class="pm-progress-label"><span>진척도</span><b th:text="${item.progress} + '%'">0%</b></div>
+  <progress class="pm-progress" max="100" th:value="${item.progress}" th:aria-label="${item.title + ' 진척도'}">진척도</progress>
+  <div class="pm-task-card-bottom"><span th:if="${item.dueDate != null}" th:classappend="${item.overdue} ? 'pm-overdue'" th:text="${(item.overdue ? '지연 · ' : '') + item.dueDate}">완료 예정일</span><span th:unless="${item.dueDate != null}" class="pm-muted">기한 미지정</span><span aria-hidden="true">↗</span></div>
+</a>
+</body>
+</html>

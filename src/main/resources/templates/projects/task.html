@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title th:text="${title}">프로젝트 업무</title>
+  <link rel="icon" type="image/svg+xml" th:href="@{/img/AppLogoMini.svg}">
+  <link rel="stylesheet" th:href="@{/css/worksystem.css}"><link rel="stylesheet" th:href="@{/css/worksystem-projects.css}">
+  <!-- 페이지 이동 화면 전환 오류 정리 — 첫 화면 그리기 전에 실행돼야 해서 head 에 둔다 -->
+  <script th:src="@{/js/worksystem-view-transition.js}"></script>
+</head>
+<body><div class="app"><div th:replace="~{fragments/app :: sidebar}"></div><main>
+  <div th:replace="~{fragments/app :: topbar}"></div>
+  <div class="content pm-root" data-project-root>
+    <nav class="pm-breadcrumb" aria-label="현재 위치"><a th:href="@{/projects}">프로젝트 관리</a><span aria-hidden="true">/</span><a th:href="@{/projects/{id}(id=${project.id})}" th:text="${project.name}">프로젝트</a><span aria-hidden="true">/</span><span th:text="'업무 #' + ${task.id}" aria-current="page">업무</span></nav>
+    <div class="banner ok" th:if="${message}" th:text="${message}" role="status"></div>
+    <div class="banner err" th:if="${error}" th:text="${error}" role="alert" tabindex="-1" data-project-error></div>
+    <header class="pm-heading"><div><span class="pm-status" th:attr="data-status=${task.status.name()}" th:text="${task.status.label}">진행 중</span><h1 th:text="${task.title}">업무명</h1><p th:text="${project.name}">프로젝트명</p></div><a class="rbtn" th:href="@{/projects/{id}(id=${project.id})}">업무 목록</a></header>
+    <div class="pm-task-facts">
+      <div><span class="pm-muted">책임 담당자</span><b th:text="${task.assigneeName}">담당자</b></div>
+      <div><span class="pm-muted">완료 예정일</span><b th:classappend="${task.overdue} ? 'pm-overdue'" th:text="${task.dueDate ?: '기한 미지정'}">기한</b></div>
+      <div class="pm-fact-progress"><span class="pm-muted">진척도</span><b th:text="${task.progress} + '%'">0%</b><progress class="pm-progress" max="100" th:value="${task.progress}" aria-label="업무 진척도">진척도</progress></div>
+      <div><span class="pm-muted">협업자</span><div class="pm-chips"><span class="pm-chip" th:each="person : ${collaborators}" th:text="${person.name}">이름</span><span class="pm-muted" th:if="${#lists.isEmpty(collaborators)}">지정된 협업자 없음</span></div></div>
+    </div>
+    <div class="pm-notice" th:unless="${canContributeProject}">완료되거나 보관된 프로젝트의 업무입니다. 작업 기록과 자료를 확인할 수 있습니다.</div>
+    <details class="pm-editor" th:if="${canEditTask}" th:open="${taskFormError == true}"><summary class="pm-editor-summary"><span>업무 수정·진척 업데이트</span><span class="pm-muted">변경 내용이 주간보고 초안에 반영됩니다</span></summary><div class="pm-editor-body"><div th:replace="~{projects/fragments :: taskForm(@{/projects/{pid}/tasks/{tid}(pid=${project.id},tid=${task.id})}, '업무 변경 저장', true)}"></div></div></details>
+    <div class="pm-task-layout">
+      <div class="pm-task-main">
+        <section class="pm-panel"><div class="pm-panel-head"><h2>업무 내용</h2></div><p class="pm-preserve pm-body-copy" th:text="${#strings.isEmpty(task.description) ? '등록된 업무 설명이 없습니다.' : task.description}">업무 설명</p></section>
+        <section class="pm-panel"><div class="pm-panel-head"><h2>체크리스트 <span class="pm-count" th:text="${#lists.size(checklist)}">0</span></h2></div>
+          <ul class="pm-checklist" th:unless="${#lists.isEmpty(checklist)}"><li th:each="entry : ${checklist}" th:classappend="${entry.completed} ? 'is-done'">
+            <form th:if="${canEditTask}" th:action="@{/projects/{pid}/tasks/{tid}/checklist/{cid}(pid=${project.id},tid=${task.id},cid=${entry.id})}" method="post" data-project-form><input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"><input type="hidden" name="completed" th:value="${!entry.completed}"><button class="pm-check-button" type="submit" th:aria-label="${entry.text + (entry.completed ? ' 완료 취소' : ' 완료 처리')}" th:aria-pressed="${entry.completed}"><svg th:if="${entry.completed}" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m3 8 3 3 7-7"/></svg></button></form>
+            <span class="pm-check-static" th:unless="${canEditTask}" th:text="${entry.completed ? '✓' : '○'}" th:aria-label="${entry.completed ? '완료' : '미완료'}">○</span><span th:text="${entry.text}">세부 작업</span>
+          </li></ul>
+          <p class="pm-empty-inline" th:if="${#lists.isEmpty(checklist)}">작은 작업 단위로 나누면 완료 기준을 함께 확인하기 쉽습니다.</p>
+          <form class="pm-inline-form" th:if="${canEditTask}" th:action="@{/projects/{pid}/tasks/{tid}/checklist(pid=${project.id},tid=${task.id})}" method="post" data-project-form><input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"><label class="field"><span class="pm-sr-only">체크리스트 내용</span><input name="text" required maxlength="500" placeholder="추가할 세부 작업"></label><button class="rbtn" type="submit">추가</button></form>
+        </section>
+        <section class="pm-panel"><div class="pm-panel-head"><h2>근거 자료 <span class="pm-count" th:text="${#lists.size(evidence)}">0</span></h2></div>
+          <ul class="pm-evidence-list" th:unless="${#lists.isEmpty(evidence)}"><li th:each="entry : ${evidence}">
+            <span class="pm-evidence-icon" aria-hidden="true" th:text="${entry.kind == 'LINK' ? '↗' : '↓'}">자료</span>
+            <div><a th:if="${entry.kind == 'LINK'}" th:href="${entry.url}" target="_blank" rel="noopener noreferrer" th:text="${entry.title}">관련 링크</a><a th:unless="${entry.kind == 'LINK'}" download th:href="@{/projects/{pid}/files/{eid}(pid=${project.id},eid=${entry.id})}" th:text="${#strings.isEmpty(entry.title) ? entry.originalFilename : entry.title}">첨부파일</a><small><span th:text="${entry.uploadedByName}">작성자</span><span aria-hidden="true"> · </span><time th:text="${#temporals.format(entry.createdAt, 'MM.dd HH:mm')}">일시</time><span th:if="${entry.kind == 'FILE'}" th:text="' · ' + ${#numbers.formatDecimal(entry.sizeBytes / 1024.0, 1, 1)} + ' KB'">크기</span></small></div>
+          </li></ul>
+          <p class="pm-empty-inline" th:if="${#lists.isEmpty(evidence)}">결과 문서, 화면, 관련 링크를 남겨 작업의 근거를 공유하세요.</p>
+          <div class="pm-evidence-forms" th:if="${canContributeProject}">
+            <details class="pm-mini-editor" th:open="${error != null and (!#strings.isEmpty(draftLinkUrl) or !#strings.isEmpty(draftLinkTitle))}"><summary>＋ 링크 추가</summary><form class="pm-form" th:action="@{/projects/{pid}/tasks/{tid}/links(pid=${project.id},tid=${task.id})}" method="post" data-project-form><input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"><label class="field">자료 이름 <input name="title" th:value="${draftLinkTitle}" maxlength="200" required placeholder="예: API 설계 문서"></label><label class="field">자료 주소 <input type="url" name="url" th:value="${draftLinkUrl}" maxlength="2000" required placeholder="https://"></label><button class="rbtn acc" type="submit">링크 등록</button></form></details>
+            <details class="pm-mini-editor"><summary>＋ 파일 첨부</summary><form class="pm-form" th:action="@{/projects/{pid}/tasks/{tid}/files(pid=${project.id},tid=${task.id})}" method="post" enctype="multipart/form-data" data-project-form><input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"><label class="field">자료 이름 <input name="title" maxlength="200" placeholder="비워두면 파일 이름으로 표시됩니다."></label><label class="field">첨부파일 <input type="file" name="file" required></label><p class="pm-help" th:if="${fileUploadHint != null}" th:text="${fileUploadHint}">파일 업로드 안내</p><button class="rbtn acc" type="submit">파일 등록</button></form></details>
+          </div>
+        </section>
+        <section class="pm-panel"><div class="pm-panel-head"><h2>댓글·작업 메모 <span class="pm-count" th:text="${#lists.size(comments)}">0</span></h2></div>
+          <p class="pm-help">진행한 내용, 결정 사항, 도움이 필요한 부분을 남겨주세요. 최근 댓글·작업 메모를 최대 200건까지 표시합니다.</p>
+          <ol class="pm-comments" th:unless="${#lists.isEmpty(comments)}"><li th:each="entry : ${comments}"><div class="pm-comment-meta"><b th:text="${entry.userName}">작성자</b><time th:text="${#temporals.format(entry.createdAt, 'yyyy.MM.dd HH:mm')}">일시</time></div><p class="pm-preserve" th:text="${entry.body}">작업 메모</p></li></ol>
+          <p class="pm-empty-inline" th:if="${#lists.isEmpty(comments)}">아직 남겨진 댓글이나 작업 메모가 없습니다.</p>
+          <form class="pm-form" th:if="${canContributeProject}" th:action="@{/projects/{pid}/tasks/{tid}/comments(pid=${project.id},tid=${task.id})}" method="post" data-project-form><input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"><label class="field">작업 메모 작성 <textarea class="form-textarea" name="body" rows="3" required maxlength="5000" th:text="${draftComment}" placeholder="오늘 진행한 내용과 다음 작업을 기록하세요."></textarea></label><div class="pm-form-actions"><button class="btn primary" type="submit">메모 등록</button></div></form>
+        </section>
+      </div>
+      <aside class="pm-task-aside">
+        <section class="pm-panel" id="handover"><div class="pm-panel-head"><h2>인수인계</h2></div><p class="pm-help">새 담당자가 인수를 확인하면 책임 담당자가 변경됩니다. 이전 작업 기록은 그대로 남습니다.</p>
+          <div class="pm-handover" th:if="${handover != null}"><span class="pm-status" th:attr="data-status=${handover.status}" th:text="${handover.status == 'PENDING' ? '인수 대기' : (handover.status == 'ACCEPTED' ? '인수 완료' : (handover.status == 'CANCELLED' ? '요청 취소' : '인수 반려'))}">인수 대기</span><p class="pm-handover-people"><b th:text="${handover.fromUserName}">이전 담당자</b><span aria-label="에서">→</span><b th:text="${handover.toUserName}">새 담당자</b></p><p class="pm-preserve" th:text="${handover.summary}">전달 내용</p><small class="pm-muted" th:text="${#temporals.format(handover.requestedAt,'yyyy.MM.dd HH:mm')}">요청일</small><p th:if="${!#strings.isEmpty(handover.response)}" class="pm-handover-response"><b>인수 의견</b><span class="pm-preserve" th:text="${handover.response}">의견</span></p>
+            <form th:if="${canRespondHandover}" class="pm-form" th:action="@{/projects/{pid}/tasks/{tid}/handover/{hid}/respond(pid=${project.id},tid=${task.id},hid=${handover.id})}" method="post" data-project-form><input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"><label class="field">인수 의견 <textarea class="form-textarea" name="response" rows="3" maxlength="2000" placeholder="확인한 내용이나 추가로 필요한 내용을 적어주세요."></textarea></label><div class="pm-form-actions pm-actions-split"><button class="rbtn" type="submit" name="decision" value="REJECT">반려</button><button class="btn primary" type="submit" name="decision" value="ACCEPT">인수 확인</button></div></form>
+            <form th:if="${canCancelHandover}" class="pm-form" th:action="@{/projects/{pid}/tasks/{tid}/handover/{hid}/cancel(pid=${project.id},tid=${task.id},hid=${handover.id})}" method="post" data-project-form><input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"><button class="rbtn" type="submit">인계 요청 취소</button></form>
+          </div>
+          <p class="pm-empty-inline" th:if="${handover == null}">등록된 인수인계 요청이 없습니다.</p>
+          <details class="pm-mini-editor" th:if="${canRequestHandover}" th:open="${error != null and !#strings.isEmpty(draftHandoverSummary)}"><summary>인수인계 요청</summary><form class="pm-form" th:action="@{/projects/{pid}/tasks/{tid}/handover(pid=${project.id},tid=${task.id})}" method="post" data-project-form><input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"><label class="field">인수받을 담당자 <select name="toUserId" required><option value="">참여자 선택</option><option th:each="person : ${members}" th:if="${person.userId != task.assigneeId}" th:value="${person.userId}" th:text="${person.name + (person.teamName != null ? ' · ' + person.teamName : '')}">참여자</option></select></label><label class="field">인계 내용 <textarea class="form-textarea" name="summary" rows="5" required maxlength="5000" th:text="${draftHandoverSummary}" placeholder="현재 진행 상황, 남은 작업, 주의 사항과 확인할 자료를 적어주세요."></textarea></label><p class="pm-help">근거 자료에 올린 파일과 링크를 새 담당자도 확인할 수 있습니다.</p><button class="btn primary" type="submit">인계 요청 보내기</button></form></details>
+        </section>
+        <details class="pm-panel pm-handover-history" th:if="${!#lists.isEmpty(handoverHistory)}" data-handover-history>
+          <summary><span>인수인계 이력 <span class="pm-count" th:text="${#lists.size(handoverHistory)}">0</span></span></summary>
+          <p class="pm-help">최근 요청부터 표시됩니다. 항목을 펼치면 인계 내용과 인수 의견의 원문을 확인할 수 있습니다.</p>
+          <div class="pm-history-list">
+            <details class="pm-history-entry" th:each="entry : ${handoverHistory}">
+              <summary><span class="pm-history-route"><b th:text="${entry.fromUserName}">이전 담당자</b><span aria-label="에서">→</span><b th:text="${entry.toUserName}">새 담당자</b></span><span class="pm-status" th:attr="data-status=${entry.status}" th:text="${entry.status == 'PENDING' ? '인수 대기' : (entry.status == 'ACCEPTED' ? '인수 완료' : (entry.status == 'CANCELLED' ? '요청 취소' : '인수 반려'))}">처리 상태</span><time th:text="${#temporals.format(entry.requestedAt, 'yyyy.MM.dd HH:mm')}">요청일</time></summary>
+              <div class="pm-history-body">
+                <dl><dt>요청자</dt><dd th:text="${entry.requestedByName ?: entry.fromUserName}">요청자</dd><dt>요청 일시</dt><dd th:text="${#temporals.format(entry.requestedAt, 'yyyy.MM.dd HH:mm')}">요청일</dd><dt th:if="${entry.respondedAt != null}">처리 일시</dt><dd th:if="${entry.respondedAt != null}" th:text="${#temporals.format(entry.respondedAt, 'yyyy.MM.dd HH:mm')}">처리일</dd></dl>
+                <h3>인계 내용</h3><p class="pm-preserve" th:text="${entry.summary}">인계 원문</p>
+                <h3>인수 의견</h3><p class="pm-preserve" th:text="${#strings.isEmpty(entry.response) ? '별도 의견이 없습니다.' : entry.response}">인수 의견 원문</p>
+              </div>
+            </details>
+          </div>
+        </details>
+        <section class="pm-panel"><div class="pm-panel-head"><h2>활동 기록</h2></div><p class="pm-help">담당 변경과 진행 내역의 최근 활동을 최대 200건까지 표시합니다.</p><ol class="pm-timeline" th:unless="${#lists.isEmpty(activities)}"><li th:each="entry : ${activities}"><b th:text="${entry.actorName}">이름</b><p class="pm-preserve" th:text="${entry.summary}">작업 내역</p><time th:text="${#temporals.format(entry.occurredAt,'MM.dd HH:mm')}">일시</time></li></ol><p class="pm-empty-inline" th:if="${#lists.isEmpty(activities)}">아직 활동 기록이 없습니다.</p></section>
+        <a class="pm-report-link" th:href="@{/report/my}" th:if="${!hiddenMenus.contains('reports') and !hiddenMenus.contains('report.my')}"><strong>이번 주 보고에서 확인 <span aria-hidden="true">↗</span></strong><span>내 작업 기록이 보고 초안에 자동으로 모입니다.</span></a>
+      </aside>
+    </div>
+  </div>
+</main></div><script th:src="@{/js/worksystem-projects.js}"></script></body>
+</html>

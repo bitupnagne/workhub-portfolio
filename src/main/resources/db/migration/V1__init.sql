@@ -1,0 +1,107 @@
+CREATE TABLE teams (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  code VARCHAR(20) NOT NULL UNIQUE,
+  name VARCHAR(100) NOT NULL,
+  display_order INT NOT NULL DEFAULT 0,
+  active BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE roles (
+  code VARCHAR(40) PRIMARY KEY,
+  name VARCHAR(80) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE users (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  username VARCHAR(50) NOT NULL UNIQUE,
+  password VARCHAR(255) NOT NULL,
+  name VARCHAR(50) NOT NULL,
+  team_id BIGINT NULL,
+  dept VARCHAR(100) NULL,
+  active BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_users_team FOREIGN KEY (team_id) REFERENCES teams(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE user_roles (
+  user_id BIGINT NOT NULL,
+  role_code VARCHAR(40) NOT NULL,
+  PRIMARY KEY (user_id, role_code),
+  CONSTRAINT fk_user_roles_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  CONSTRAINT fk_user_roles_role FOREIGN KEY (role_code) REFERENCES roles(code)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE app_settings (
+  setting_key VARCHAR(80) PRIMARY KEY,
+  setting_value VARCHAR(255) NOT NULL,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE weekly_reports (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  user_id BIGINT NOT NULL,
+  week_key VARCHAR(10) NOT NULL,
+  submitted BOOLEAN NOT NULL DEFAULT FALSE,
+  submitted_at DATETIME NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uk_weekly_reports_user_week (user_id, week_key),
+  CONSTRAINT fk_weekly_reports_user FOREIGN KEY (user_id) REFERENCES users(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE team_weekly_status (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  team_id BIGINT NOT NULL,
+  week_key VARCHAR(10) NOT NULL,
+  submitted BOOLEAN NOT NULL DEFAULT FALSE,
+  submitted_at DATETIME NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uk_team_weekly_status_team_week (team_id, week_key),
+  CONSTRAINT fk_team_weekly_status_team FOREIGN KEY (team_id) REFERENCES teams(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE weekly_confirmations (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  week_key VARCHAR(10) NOT NULL UNIQUE,
+  confirmed BOOLEAN NOT NULL DEFAULT FALSE,
+  confirmed_at DATETIME NULL,
+  confirmed_by BIGINT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_weekly_confirmations_user FOREIGN KEY (confirmed_by) REFERENCES users(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE report_items (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  weekly_report_id BIGINT NOT NULL,
+  content TEXT NOT NULL,
+  due_date DATE NULL,
+  cycle VARCHAR(50) NULL,
+  status ENUM('NEW','CONTINUE','DONE') NOT NULL DEFAULT 'NEW',
+  display_order INT NOT NULL DEFAULT 0,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_report_items_report FOREIGN KEY (weekly_report_id) REFERENCES weekly_reports(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE report_item_details (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  report_item_id BIGINT NOT NULL,
+  text TEXT NOT NULL,
+  due_date DATE NULL,
+  cycle VARCHAR(50) NULL,
+  display_order INT NOT NULL DEFAULT 0,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_report_item_details_item FOREIGN KEY (report_item_id) REFERENCES report_items(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE INDEX idx_users_team ON users(team_id);
+CREATE INDEX idx_weekly_reports_week ON weekly_reports(week_key);
+CREATE INDEX idx_report_items_report ON report_items(weekly_report_id, status, display_order);
+CREATE INDEX idx_details_item ON report_item_details(report_item_id, display_order);
+CREATE INDEX idx_team_status_week ON team_weekly_status(week_key);

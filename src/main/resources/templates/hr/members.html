@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>직원 HR 관리</title>
+  <link rel="icon" type="image/svg+xml" th:href="@{/img/AppLogoMini.svg}">
+  <link rel="stylesheet" th:href="@{/css/worksystem.css}">
+  <!-- 페이지 이동 화면 전환 오류 정리 — 첫 화면 그리기 전에 실행돼야 해서 head 에 둔다 -->
+  <script th:src="@{/js/worksystem-view-transition.js}"></script>
+</head>
+<body>
+<div class="app">
+  <div th:replace="~{fragments/app :: sidebar}"></div>
+  <main>
+    <div th:replace="~{fragments/app :: topbar}"></div>
+    <div class="content" data-ws-query-contract="hr-members-v1" data-ws-query-path="self" data-ws-query-params="from to q page" th:attr="data-ws-query-context=|${canManageHr}:${canManageOrganization}|">
+      <div class="banner ok" th:if="${message}" th:text="${message}"></div>
+      <div class="banner err" th:if="${error}" th:text="${error}"></div>
+
+      <!-- [B4] 기본 근무시간/특정일 예외 폼은 근태 설정(/hr/attendance/policy)으로 이전 -->
+      <form data-ws-query-filter="directory" class="filter-panel" method="get" th:action="@{/hr/members}">
+        <input class="mini-input att-date-input" type="date" name="from" th:value="${fromDate}" aria-label="시작일">
+        <input class="mini-input att-date-input" type="date" name="to" th:value="${toDate}" aria-label="종료일">
+        <input class="mini-input" type="text" name="q" th:value="${query}" placeholder="이름 / 팀 검색">
+        <a class="btn" th:href="@{/hr/members}" data-ws-query-reset="">초기화</a>
+        <a class="btn" th:if="${canManageHr}" th:href="@{/hr/attendance/policy}" data-ws-query-reset="">근태 설정</a>
+        <!-- [UX4] 직원 등록 — 인사관리 흐름에서 바로 진입 -->
+        <a class="btn primary" th:if="${canManageOrganization}" th:href="@{/admin/users/new}" data-app-form data-app-form-size="wide" data-app-form-label="직원 등록"><svg th:replace="~{fragments/icons :: i('add')}"></svg> 직원 등록</a>
+      </form>
+
+      <section class="section-block">
+        <div class="section-header no-caret">
+          <div class="section-left">
+            <span class="sdot sdot-done"></span>
+            <span class="sname">직원들 통합 현황</span>
+            <span data-ws-query-state="count" class="scnt scnt-done" th:text="${memberTotal}">0</span>
+            <span data-ws-query-state="range" class="muted" style="margin-left:10px;font-size:11px;" th:text="|${fromDate} ~ ${toDate}|">기간</span>
+          </div>
+        </div>
+        <div class="table-scroll m-desktop-only" data-ws-query-region="desktop">
+          <table class="rt board-table compact-hr-table">
+            <thead>
+              <tr>
+                <th>팀</th><th>이름</th>
+                <th>휴가 일수</th><th>휴가 건수</th>
+                <th>시차 건수</th>
+                <th>출장 건수</th><th>출장 일수</th>
+                <th>출근일</th><th>지각</th><th>결근</th>
+                <th>관리</th>
+              </tr>
+            </thead>
+            <tbody>
+            <tr class="empty-tr" th:if="${#lists.isEmpty(members)}"><td colspan="11">조회 조건에 맞는 직원이 없습니다.</td></tr>
+            <tr th:each="m : ${members}">
+              <td th:text="${m.teamName}">팀</td>
+              <td><b th:text="${m.memberName}">이름</b></td>
+              <td><b th:text="|${m.leaveDays}일|">0일</b></td>
+              <td th:text="|${m.leaveCount}건|">0건</td>
+              <td th:text="|${m.flexCount}건|">0건</td>
+              <td th:text="|${m.tripCount}건|">0건</td>
+              <td th:text="|${m.tripDays}일|">0일</td>
+              <td th:text="|${m.attended}일|">0일</td>
+              <td th:text="|${m.late}일|">0일</td>
+              <td th:text="|${m.absent}일|">0일</td>
+              <td>
+                <!-- [UX28] 페이지 이동 없이 모달로 상세 열기. [UX45] 열람 권한자는 본인 카드도 동일하게 -->
+                <a class="rbtn acc" data-app-form
+                   th:href="@{/hr/members/{id}(id=${m.userId},from=${fromDate},to=${toDate})}"
+                   th:attr="data-app-form-label=|${m.memberName} 인사카드|">상세</a>
+              </td>
+            </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- 모바일: 아코디언 리스트(요약 = 이름·팀·출근/지각/결근, 펼치면 전체 스탯 + 상세) -->
+        <div class="m-emp-list" data-ws-query-region="mobile">
+          <p class="m-emp-empty" th:if="${#lists.isEmpty(members)}">조회 조건에 맞는 직원이 없습니다.</p>
+          <details class="m-emp-acc" th:each="m : ${members}">
+            <summary>
+              <span class="m-emp-id">
+                <b th:text="${m.memberName}">이름</b>
+                <em th:text="${m.teamName}">팀</em>
+              </span>
+              <span class="m-emp-quick">
+                <span>출근 <b th:text="${m.attended}">0</b></span>
+                <span th:classappend="${m.late > 0} ? ' warn'">지각 <b th:text="${m.late}">0</b></span>
+                <span th:classappend="${m.absent > 0} ? ' danger'">결근 <b th:text="${m.absent}">0</b></span>
+              </span>
+            </summary>
+            <div class="m-emp-detail">
+              <div class="m-emp-stat"><span>휴가 일수</span><b th:text="|${m.leaveDays}일|">0일</b></div>
+              <div class="m-emp-stat"><span>휴가 건수</span><b th:text="|${m.leaveCount}건|">0건</b></div>
+              <div class="m-emp-stat"><span>시차 건수</span><b th:text="|${m.flexCount}건|">0건</b></div>
+              <div class="m-emp-stat"><span>출장 건수</span><b th:text="|${m.tripCount}건|">0건</b></div>
+              <div class="m-emp-stat"><span>출장 일수</span><b th:text="|${m.tripDays}일|">0일</b></div>
+              <div class="m-emp-stat"><span>출근일</span><b th:text="|${m.attended}일|">0일</b></div>
+              <div class="m-emp-stat"><span>지각</span><b th:text="|${m.late}일|">0일</b></div>
+              <div class="m-emp-stat"><span>결근</span><b th:text="|${m.absent}일|">0일</b></div>
+              <a class="btn primary block" data-app-form
+                 th:href="@{/hr/members/{id}(id=${m.userId},from=${fromDate},to=${toDate})}"
+                 th:attr="data-app-form-label=|${m.memberName} 인사카드|">상세 보기</a>
+            </div>
+          </details>
+        </div>
+        <div th:replace="~{fragments/app :: pagination(${pageInfo}, ${pageBaseUrl})}"></div>
+      </section>
+    </div>
+  </main>
+</div>
+
+<!-- [UX28] 직원 상세 모달 — 상세 버튼(data-app-form)이 인사카드 .content를 주입 -->
+
+<script th:src="@{/js/worksystem-app-form-modal.js}"></script>
+</body>
+</html>

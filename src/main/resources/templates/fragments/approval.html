@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<div th:fragment="stamp(steps, sigs, mode, applicantName, applicantSig, applicantAt)" class="approval-stamp-wrap">
+  <div class="empty-state" th:if="${steps == null or #lists.isEmpty(steps)}">
+    설정된 결재 경로가 없습니다. 관리자에게 결재 경로 설정을 요청하세요.
+  </div>
+  <table class="approval-stamp" th:unless="${steps == null or #lists.isEmpty(steps)}"
+         th:with="hasAppSig=${applicantSig != null and !#strings.isEmpty(applicantSig)}">
+    <tr>
+      <th class="stamp-side" rowspan="2"><span>결</span><span>재</span></th>
+      <td class="stamp-title stamp-drafter">기안자</td>
+      <td class="stamp-title" th:each="s : ${steps}"
+          th:text="${(s.approverJobTitle == '대표이사' or s.approverDept == '대표이사') ? '대표이사'
+                   : ((s.approverJobTitle != null and #strings.endsWith(s.approverJobTitle,'장') and s.approverDept != null and !#strings.isEmpty(s.approverDept)) ? s.approverDept + '장'
+                   : (s.approverType != null ? s.approverType.label : '결재'))}">직책</td>
+    </tr>
+    <tr>
+      <td class="stamp-sign stamp-drafter is-ok">
+        <span class="stamp-typed">
+          <b th:text="${applicantName}">이름</b>
+          <img th:if="${hasAppSig}" th:src="@{/signature-images/{f}(f=${applicantSig})}" alt="기안자 서명">
+          <small th:if="${applicantAt != null}"
+                 th:text="${#temporals.format(applicantAt, 'yyyy-MM-dd HH:mm:ss')}">2026-05-19 09:00:00</small>
+        </span>
+      </td>
+      <td class="stamp-sign" th:each="s : ${steps}"
+          th:with="st=${s.status != null ? s.status.name() : 'PENDING'},
+                   acted=${(s.status != null and (s.status.name() == 'APPROVED' or s.status.name() == 'REJECTED')) and s.actedAt != null},
+                   signed=${sigs != null and s.actedBy != null and sigs.containsKey(s.actedBy) and !#strings.isEmpty(sigs[s.actedBy])}"
+          th:classappend="${st == 'APPROVED'} ? ' is-ok' : (${st == 'REJECTED'} ? ' is-no' : ' is-wait')">
+        <span class="stamp-typed">
+          <b th:text="${s.actedByName != null} ? ${s.actedByName} : (${s.delegateName != null} ? |${s.approverName} / 대리 ${s.delegateName}| : ${s.approverName})">이름</b>
+          <img th:if="${signed}" th:src="@{/signature-images/{f}(f=${sigs[s.actedBy]})}" alt="서명">
+          <em class="stamp-delegate-mark"
+              th:if="${s.actedBy != null and s.delegateUserId != null and s.actedBy == s.delegateUserId and s.actedBy != s.approverUserId}">代</em>
+          <small th:if="${acted}" th:text="${#temporals.format(s.actedAt, 'yyyy-MM-dd HH:mm:ss')}">2026-05-19 09:00:00</small>
+          <small th:if="${!acted}"
+                 th:text="${st == 'REJECTED'} ? '반려' : (${mode == 'preview'} ? '예정' : '대기')">대기</small>
+        </span>
+      </td>
+    </tr>
+  </table>
+</div>
+
+<div th:fragment="applicantSign(name, sigFile, signedAt)" class="doc-applicant-sign">
+  <span class="das-label">신청자</span>
+  <span class="das-mark">
+    <img th:if="${sigFile != null and !#strings.isEmpty(sigFile)}"
+         th:src="@{/signature-images/{f}(f=${sigFile})}" alt="신청자 서명">
+    <span th:unless="${sigFile != null and !#strings.isEmpty(sigFile)}" class="das-typed">
+      <b th:text="${name}">이순신</b>
+      <small th:if="${signedAt != null}"
+             th:text="${#temporals.format(signedAt, 'yyyy-MM-dd')}">2026-05-19</small>
+      <small th:if="${signedAt != null}"
+             th:text="${#temporals.format(signedAt, 'HH:mm:ss')}">09:00:00</small>
+    </span>
+  </span>
+</div>
+</body>
+</html>

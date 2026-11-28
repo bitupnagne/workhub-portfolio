@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.portfolio.worksystem.mapper.LeaveAllowanceMapper">
+
+    <select id="findByYear" resultType="LeaveAllowanceRate">
+        SELECT r.id, r.rate_year, r.grade_id, g.name AS grade_name, r.daily_amount,
+               r.updated_by, u.name AS updated_by_name, r.updated_at
+        FROM leave_allowance_rates r
+        JOIN emp_grades g ON g.id = r.grade_id
+        LEFT JOIN users u ON u.id = r.updated_by
+        WHERE r.rate_year = #{year}
+        ORDER BY g.display_order, g.id
+    </select>
+
+    <select id="findYearsWithRates" resultType="java.lang.Integer">
+        SELECT DISTINCT rate_year FROM leave_allowance_rates ORDER BY rate_year DESC
+    </select>
+
+    <insert id="upsert" parameterType="LeaveAllowanceRate">
+        INSERT INTO leave_allowance_rates(rate_year, grade_id, daily_amount, updated_by)
+        VALUES(#{rateYear}, #{gradeId}, #{dailyAmount}, #{updatedBy})
+        ON DUPLICATE KEY UPDATE
+            daily_amount = VALUES(daily_amount),
+            updated_by = VALUES(updated_by)
+    </insert>
+
+    <delete id="delete">
+        DELETE FROM leave_allowance_rates WHERE rate_year = #{year} AND grade_id = #{gradeId}
+    </delete>
+</mapper>

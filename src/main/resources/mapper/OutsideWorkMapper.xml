@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.portfolio.worksystem.mapper.OutsideWorkMapper">
+
+    <sql id="Columns">
+        r.id, r.user_id, u.name AS member_name, u.team_id, t.name AS team_name,
+        r.work_date, r.out_time, r.end_time, r.place, r.reason, r.status, r.current_approval_step,
+        r.decided_by, r.rejected_reason, r.attendance_applied, r.created_at
+    </sql>
+
+    <insert id="insert" parameterType="OutsideWorkRequest" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO outside_work_requests(user_id, work_date, out_time, end_time, place, reason, status, current_approval_step)
+        VALUES(#{userId}, #{workDate}, #{outTime}, #{endTime}, #{place}, #{reason}, #{status}, #{currentApprovalStep})
+    </insert>
+
+    <select id="findById" resultType="OutsideWorkRequest">
+        SELECT <include refid="Columns"/>
+        FROM outside_work_requests r
+        JOIN users u ON u.id = r.user_id
+        LEFT JOIN teams t ON t.id = u.team_id
+        WHERE r.id = #{id}
+    </select>
+
+    <select id="findRequests" resultType="OutsideWorkRequest">
+        SELECT <include refid="Columns"/>
+        FROM outside_work_requests r
+        JOIN users u ON u.id = r.user_id
+        LEFT JOIN teams t ON t.id = u.team_id
+        WHERE (#{userId} IS NULL OR r.user_id = #{userId})
+          <if test="userIds != null">
+            AND r.user_id IN
+            <foreach collection="userIds" item="uid" open="(" separator="," close=")">#{uid}</foreach>
+          </if>
+          AND (#{from} IS NULL OR r.work_date >= #{from})
+          AND (#{to} IS NULL OR r.work_date &lt;= #{to})
+        ORDER BY r.work_date DESC, r.id DESC
+    </select>
+
+    <select id="findActiveOnDate" resultType="OutsideWorkRequest">
+        SELECT <include refid="Columns"/>
+        FROM outside_work_requests r
+        JOIN users u ON u.id = r.user_id
+        LEFT JOIN teams t ON t.id = u.team_id
+        WHERE r.user_id = #{userId} AND r.work_date = #{workDate} AND r.status IN ('PENDING', 'APPROVED')
+        LIMIT 1
+    </select>
+
+    <select id="findApprovedOnDate" resultType="OutsideWorkRequest">
+        SELECT <include refid="Columns"/>
+        FROM outside_work_requests r
+        JOIN users u ON u.id = r.user_id
+        LEFT JOIN teams t ON t.id = u.team_id
+        WHERE r.user_id = #{userId} AND r.work_date = #{workDate} AND r.status = 'APPROVED'
+        LIMIT 1
+    </select>
+
+    <update id="updateStatus">
+        UPDATE outside_work_requests
+        SET status = #{status}, decided_by = #{decidedBy}, rejected_reason = #{rejectedReason}
+        WHERE id = #{id}
+    </update>
+
+    <update id="updateCurrentStep">
+        UPDATE outside_work_requests SET current_approval_step = #{step} WHERE id = #{id}
+    </update>
+
+    <update id="markAttendanceApplied">
+        UPDATE outside_work_requests SET attendance_applied = TRUE WHERE id = #{id}
+    </update>
+</mapper>

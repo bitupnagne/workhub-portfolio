@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title th:text="${title}">외부망 메뉴 관리</title>
+  <link rel="icon" type="image/svg+xml" th:href="@{/img/AppLogoMini.svg}">
+  <link rel="stylesheet" th:href="@{/css/worksystem.css}">
+  <!-- 페이지 이동 화면 전환 오류 정리 — 첫 화면 그리기 전에 실행돼야 해서 head 에 둔다 -->
+  <script th:src="@{/js/worksystem-view-transition.js}"></script>
+</head>
+<body>
+<div class="app">
+  <div th:replace="~{fragments/app :: sidebar}"></div>
+  <main>
+    <div th:replace="~{fragments/app :: topbar}"></div>
+    <div class="content admin-page system-page">
+      <div class="banner ok" th:if="${message}" th:text="${message}"></div>
+      <div class="banner err" th:if="${error}" th:text="${error}"></div>
+
+      <div class="admin-title-row release-hero">
+        <div>
+          <span class="dash-eyebrow">Menu Visibility</span>
+          <h2>내·외부망 메뉴 노출 관리</h2>
+        </div>
+      </div>
+
+      <section class="section-block system-theme-card">
+        <div class="section-header no-caret">
+          <div class="section-left"><span class="sdot sdot-new"></span><span class="sname">메뉴별 내부망 / 외부망 노출</span></div>
+        </div>
+        <form data-edit-form class="admin-form-panel system-theme-form" th:action="@{/admin/system/external-menu}" method="post">
+          <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+
+          <div class="ext-menu-tree">
+            <div class="ext-menu-zone-head">
+              <span></span>
+              <span class="ext-zone-label">내부망</span>
+              <span class="ext-zone-label">외부망</span>
+            </div>
+            <!-- [UX51] 큰 메뉴만 먼저 — 하위는 아코디언으로 펼침/접힘(기본 접힘). 그룹 행 전체 클릭으로 토글. -->
+            <div class="ext-menu-group" th:each="group : ${menuTree}"
+                 th:classappend="${!#lists.isEmpty(group.children)} ? 'has-children' : ''"
+                 th:attr="data-disclosure=${#lists.isEmpty(group.children)} ? null : 'true'">
+              <div class="ext-menu-row ext-menu-grow" data-emg-head th:attr="data-disclosure-head=${#lists.isEmpty(group.children)} ? null : 'true'">
+                <span class="ext-menu-name">
+                  <span th:text="${group.label}">그룹</span>
+                  <em class="ext-menu-count" th:text="|${#lists.size(group.children)}개|">0개</em>
+                </span>
+                <label class="toggle-switch" title="내부망 노출">
+                  <input type="checkbox" name="intShown" th:value="${group.key}" th:checked="${intShownMenus.contains(group.key)}">
+                  <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                </label>
+                <label class="toggle-switch" title="외부망 노출">
+                  <input type="checkbox" name="extShown" th:value="${group.key}" th:checked="${shownMenus.contains(group.key)}">
+                  <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                </label>
+              </div>
+              <!-- 하위(2depth) 항목 토글 — 기본 접힘(높이 애니메이션) -->
+              <div class="ext-menu-children" data-emg-children data-disclosure-body>
+                <div class="ext-menu-children-inner">
+                <div class="ext-menu-row ext-menu-crow" th:each="item : ${group.children}">
+                  <span class="ext-menu-name"><span class="ext-menu-sub"><svg th:replace="~{fragments/icons :: i('chevron_right')}"></svg></span><span th:text="${item.label}">항목</span></span>
+                  <label class="toggle-switch" title="내부망 노출">
+                    <input type="checkbox" name="intShown" th:value="${item.key}" th:checked="${intShownMenus.contains(item.key)}">
+                    <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                  </label>
+                  <label class="toggle-switch" title="외부망 노출">
+                    <input type="checkbox" name="extShown" th:value="${item.key}" th:checked="${shownMenus.contains(item.key)}">
+                    <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                  </label>
+                </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <p class="form-hint" style="margin:12px 0 0;color:var(--text-3);font-size:12px">
+            숨긴 메뉴는 주소로 들어와도 막힙니다. 대시보드를 숨기면 런처 화면이 홈이 됩니다.
+          </p>
+          <div class="form-actions">
+            <button class="btn primary" type="submit">메뉴 노출 설정 저장</button>
+          </div>
+        </form>
+      </section>
+    </div>
+  </main>
+</div>
+<script>
+  // [UX50] 그룹 토글 OFF면 같은 존의 하위 토글을 흐리게(시각적 안내 — 저장 로직은 서버가 판단)
+  function zoneSync(groupEl, zoneName) {
+    var gcb = groupEl.querySelector('.ext-menu-grow input[name=' + zoneName + ']');
+    var on = gcb && gcb.checked;
+    groupEl.querySelectorAll('.ext-menu-crow input[name=' + zoneName + ']').forEach(function (cb) {
+      cb.closest('.toggle-switch').classList.toggle('is-group-off', !on);
+    });
+  }
+  document.querySelectorAll('.ext-menu-group').forEach(function (groupEl) {
+    ['intShown', 'extShown'].forEach(function (z) { zoneSync(groupEl, z); });
+    groupEl.querySelectorAll('input[type=checkbox]').forEach(function (cb) {
+      cb.addEventListener('change', function () {
+        if (cb.closest('.ext-menu-grow')) zoneSync(groupEl, cb.name);
+      });
+    });
+  });
+</script>
+</body>
+</html>

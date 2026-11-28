@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.portfolio.worksystem.mapper.PayrollMapper">
+
+    <sql id="wageColumns">
+        SELECT w.id, w.grade_id, g.name AS grade_name, w.effective_from, w.hourly_wage, w.note,
+               w.created_by, u.name AS created_by_name, w.created_at
+        FROM grade_hourly_wages w
+        JOIN emp_grades g ON g.id = w.grade_id
+        LEFT JOIN users u ON u.id = w.created_by
+    </sql>
+
+    <select id="findAllWages" resultType="GradeHourlyWage">
+        <include refid="wageColumns"/>
+        ORDER BY w.grade_id, w.effective_from
+    </select>
+
+    <select id="findWage" resultType="GradeHourlyWage">
+        <include refid="wageColumns"/>
+        WHERE w.id = #{id}
+    </select>
+
+    <insert id="upsertWage" parameterType="GradeHourlyWage">
+        INSERT INTO grade_hourly_wages(grade_id, effective_from, hourly_wage, note, created_by)
+        VALUES(#{gradeId}, #{effectiveFrom}, #{hourlyWage}, #{note}, #{createdBy})
+        ON DUPLICATE KEY UPDATE hourly_wage = VALUES(hourly_wage), note = VALUES(note),
+                                created_by = VALUES(created_by), created_at = CURRENT_TIMESTAMP
+    </insert>
+
+    <delete id="deleteWage">
+        DELETE FROM grade_hourly_wages WHERE id = #{id}
+    </delete>
+
+    <insert id="insertLog">
+        INSERT INTO grade_hourly_wage_logs(grade_id, grade_name, action, effective_from, hourly_wage, actor_id, actor_name)
+        VALUES(#{gradeId}, #{gradeName}, #{action}, #{effectiveFrom}, #{hourlyWage}, #{actorId}, #{actorName})
+    </insert>
+</mapper>

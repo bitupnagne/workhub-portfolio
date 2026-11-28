@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.portfolio.worksystem.mapper.DeploySsoMapper">
+
+    <resultMap id="DeploySsoLinkMap" type="DeploySsoLink">
+        <id property="id" column="id"/>
+        <result property="officeUserId" column="office_user_id"/>
+        <result property="officeUsername" column="office_username"/>
+        <result property="deployUserId" column="deploy_user_id"/>
+        <result property="deployLoginId" column="deploy_login_id"/>
+        <result property="deployName" column="deploy_name"/>
+        <result property="active" column="active"/>
+        <result property="linkedAt" column="linked_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <select id="findActiveByOfficeUserId" resultMap="DeploySsoLinkMap">
+        SELECT id, office_user_id, office_username, deploy_user_id, deploy_login_id, deploy_name,
+               active, linked_at, updated_at
+        FROM deploy_sso_links
+        WHERE office_user_id = #{officeUserId}
+          AND active = TRUE
+    </select>
+
+    <insert id="upsertLink">
+        INSERT INTO deploy_sso_links(office_user_id, office_username, deploy_user_id, deploy_login_id, deploy_name, active, linked_at)
+        VALUES(#{officeUserId}, #{officeUsername}, #{deployUserId}, #{deployLoginId}, #{deployName}, TRUE, NOW())
+        ON DUPLICATE KEY UPDATE
+            office_username = VALUES(office_username),
+            deploy_user_id = VALUES(deploy_user_id),
+            deploy_login_id = VALUES(deploy_login_id),
+            deploy_name = VALUES(deploy_name),
+            active = TRUE,
+            updated_at = NOW()
+    </insert>
+
+    <update id="deactivate">
+        UPDATE deploy_sso_links
+        SET active = FALSE, updated_at = NOW()
+        WHERE office_user_id = #{officeUserId}
+    </update>
+</mapper>

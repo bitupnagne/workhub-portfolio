@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.portfolio.worksystem.mapper.LoaMapper">
+
+    <select id="findTypes" resultType="LoaType">
+        SELECT code, label, accrual_treatment, evidence_required, active, sort_order
+        FROM loa_types ORDER BY sort_order, code
+    </select>
+
+    <select id="findType" resultType="LoaType">
+        SELECT code, label, accrual_treatment, evidence_required, active, sort_order
+        FROM loa_types WHERE code = #{code}
+    </select>
+
+    <update id="updateType" parameterType="LoaType">
+        UPDATE loa_types
+        SET label = #{label}, accrual_treatment = #{accrualTreatment},
+            evidence_required = #{evidenceRequired}, active = #{active}, sort_order = #{sortOrder}
+        WHERE code = #{code}
+    </update>
+
+    <sql id="RequestColumns">
+        r.id, r.user_id, r.type, lt.label AS type_label, lt.accrual_treatment,
+        u.name AS member_name, u.team_id, t.name AS team_name,
+        r.start_date, r.end_date, r.reason, r.status, r.current_approval_step,
+        r.decided_by, r.rejected_reason, r.created_at
+    </sql>
+
+    <insert id="insertRequest" parameterType="LoaRequest" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO loa_requests(user_id, type, start_date, end_date, reason, status, current_approval_step, decided_by)
+        VALUES(#{userId}, #{type}, #{startDate}, #{endDate}, #{reason}, #{status}, #{currentApprovalStep}, #{decidedBy})
+    </insert>
+
+    <select id="findRequest" resultType="LoaRequest">
+        SELECT <include refid="RequestColumns"/>
+        FROM loa_requests r
+        JOIN users u ON u.id = r.user_id
+        JOIN loa_types lt ON lt.code = r.type
+        LEFT JOIN teams t ON t.id = u.team_id
+        WHERE r.id = #{id}
+    </select>
+
+    <select id="findRequests" resultType="LoaRequest">
+        SELECT <include refid="RequestColumns"/>
+        FROM loa_requests r
+        JOIN users u ON u.id = r.user_id
+        JOIN loa_types lt ON lt.code = r.type
+        LEFT JOIN teams t ON t.id = u.team_id
+        WHERE (#{userId} IS NULL OR r.user_id = #{userId})
+          AND (#{teamId} IS NULL OR u.team_id = #{teamId})
+          AND (#{year} IS NULL OR YEAR(r.start_date) = #{year})
+        ORDER BY r.start_date DESC, r.id DESC
+    </select>
+
+    <update id="updateStatus">
+        UPDATE loa_requests
+        SET status = #{status}, decided_by = #{decidedBy}, rejected_reason = #{rejectedReason}
+        WHERE id = #{id}
+    </update>
+
+    <update id="updateCurrentStep">
+        UPDATE loa_requests SET current_approval_step = #{step} WHERE id = #{id}
+    </update>
+
+    <!-- end_date 가 NULL 이면 복직일 미정 = 열린 구간이라 그 뒤 전부와 겹친다. -->
+    <select id="findOverlapping" resultType="LoaRequest">
+        SELECT <include refid="RequestColumns"/>
+        FROM loa_requests r
+        JOIN users u ON u.id = r.user_id
+        JOIN loa_types lt ON lt.code = r.type
+        LEFT JOIN teams t ON t.id = u.team_id
+        WHERE r.user_id = #{userId}
+          AND r.status IN ('PENDING', 'APPROVED')
+          AND (#{excludeId} IS NULL OR r.id != #{excludeId})
+          AND (r.end_date IS NULL OR r.end_date >= #{startDate})
+          AND (#{endDate} IS NULL OR r.start_date &lt;= #{endDate})
+        ORDER BY r.start_date
+        LIMIT 1
+    </select>
+
+    <update id="applyToUser">
+        UPDATE users SET loa_type = #{type}, loa_start = #{startDate}, loa_end = #{endDate}
+        WHERE id = #{userId}
+    </update>
+
+    <update id="closeApprovedPeriod">
+        UPDATE loa_requests
+        SET status = CASE WHEN start_date > #{lastLeaveDate} THEN 'CANCELED' ELSE status END,
+            end_date = CASE WHEN start_date > #{lastLeaveDate} THEN end_date
+                            WHEN end_date IS NULL OR end_date > #{lastLeaveDate} THEN #{lastLeaveDate}
+                            ELSE end_date END,
+            decided_by = #{decidedBy}
+        WHERE user_id = #{userId} AND type = #{type} AND start_date = #{startDate}
+          AND status = 'APPROVED'
+    </update>
+
+    <!--
+      연차 출근율 계산용. 신청서로 들어온 승인 건과, 인사담당자가 인사카드에서 직접 넣은
+      users 의 현재 휴직을 함께 본다 — 후자는 신청서가 없으므로 신청서만 보면 누락된다.
+      같은 기간이 양쪽에 다 있으면 중복되지만, 서비스가 날짜 집합으로 합치므로 무해하다.
+    -->
+    <select id="findApprovedPeriodsInYear" resultType="LoaRequest">
+        SELECT r.user_id, r.type, lt.accrual_treatment, r.start_date, r.end_date
+        FROM loa_requests r
+        JOIN loa_types lt ON lt.code = r.type
+        WHERE r.status = 'APPROVED'
+          AND r.start_date &lt;= CONCAT(#{year}, '-12-31')
+          AND (r.end_date IS NULL OR r.end_date >= CONCAT(#{year}, '-01-01'))
+        UNION ALL
+        SELECT u.id AS user_id, u.loa_type AS type, lt.accrual_treatment, u.loa_start AS start_date, u.loa_end AS end_date
+        FROM users u
+        JOIN loa_types lt ON lt.code = u.loa_type
+        WHERE u.loa_start IS NOT NULL
+          AND u.loa_start &lt;= CONCAT(#{year}, '-12-31')
+          AND (u.loa_end IS NULL OR u.loa_end >= CONCAT(#{year}, '-01-01'))
+    </select>
+</mapper>

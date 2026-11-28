@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title th:text="${title}">일정관리</title>
+  <link rel="icon" type="image/svg+xml" th:href="@{/img/AppLogoMini.svg}">
+  <link rel="stylesheet" th:href="@{/css/worksystem.css}">
+  <!-- 페이지 이동 화면 전환 오류 정리 — 첫 화면 그리기 전에 실행돼야 해서 head 에 둔다 -->
+  <script th:src="@{/js/worksystem-view-transition.js}"></script>
+</head>
+<body>
+<div class="app">
+  <div th:replace="~{fragments/app :: sidebar}"></div>
+  <main>
+    <div th:replace="~{fragments/app :: topbar}"></div>
+    <div class="content admin-page">
+      <div class="banner ok" th:if="${message}" th:text="${message}"></div>
+      <div class="banner err" th:if="${error}" th:text="${error}"></div>
+
+      <div class="admin-title-row"><div><h2>회사 일정관리</h2></div></div>
+
+      <div data-tabs="tab">
+        <div class="ws-tabs" role="tablist">
+          <button type="button" data-tab="events" role="tab">회사 일정</button>
+          <button type="button" data-tab="holidays" role="tab">휴무일</button>
+        </div>
+        <div data-tab-panel="events" role="tabpanel">
+      <!-- [B3/UX21] 휴무일 연간 캘린더 — 법정=적색, 회사=황색. 헤더에 추가 버튼, 날짜 클릭으로 등록 -->
+      <section class="form-panel hcal-panel" data-ws-query-contract="schedule-calendar-v1" data-ws-query-path="self" data-ws-query-params="calYear" th:attr="data-ws-query-context=${canManageHr}">
+        <div class="hcal-head">
+          <a class="rbtn" th:href="@{/hr/schedules(calYear=${calYear - 1}, from=${fromDate}, to=${toDate}, q=${query}, hq=${holidayQuery})}" data-ws-query-state="calendar-heading-0"><svg th:replace="~{fragments/icons :: i('chevron_left')}"></svg></a>
+          <strong th:text="|${calYear}년 달력|" data-ws-query-state="calendar-heading-1">2026년 달력</strong>
+          <a class="rbtn" th:href="@{/hr/schedules(calYear=${calYear + 1}, from=${fromDate}, to=${toDate}, q=${query}, hq=${holidayQuery})}" data-ws-query-state="calendar-heading-2"><svg th:replace="~{fragments/icons :: i('chevron_right')}"></svg></a>
+          <div class="ws-help">
+            <button class="ws-help-toggle" type="button" data-help-toggle aria-label="일정 달력 범례" title="일정 달력 범례" aria-expanded="false" aria-controls="help-legend-3" aria-haspopup="dialog">
+              <svg th:replace="~{fragments/icons :: i('help')}"></svg>
+            </button>
+            <div id="help-legend-3" class="ws-help-popover" data-help-popover role="dialog" aria-labelledby="help-legend-3-title" hidden>
+              <div class="ws-help-head"><strong id="help-legend-3-title">일정 달력 범례</strong><button class="btn primary" type="button" data-help-close>닫기</button></div>
+              <div class="ws-help-items">
+                <span class="hcal-chip pub">법정/대체 공휴일</span>
+                <span class="hcal-chip com">회사휴무</span>
+                <span class="hcal-chip" style="background:var(--brand-light);color:var(--brand-deeper);">● 일정</span></div>
+            </div>
+          </div>
+        </div>
+        <p class="muted" th:if="${canManageHr}" style="margin:0 0 8px;font-size:11px;">날짜를 클릭해 일정 또는 휴무일을 추가합니다. 등록된 항목은 달력에 표시되며, 마우스를 올리면 내용이 보입니다.</p>
+        <!-- [A6] 법정공휴일 일괄 생성 + 임시공휴일 CSV 반입 (폐쇄망 대응) -->
+        <div class="hcal-tools" th:if="${canManageHr}">
+          <form th:action="@{/hr/schedules/holiday/generate}" method="post" class="inline-form" data-modal-size="compact" data-registration-form data-registration-title="법정공휴일 일괄 등록" data-registration-label="공휴일 등록"
+                data-confirm-message="해당 연도의 법정공휴일(대체공휴일 포함)을 일괄 등록하시겠습니까? 이미 등록된 날짜는 건너뜁니다."
+                data-confirm-ok="일괄 등록">
+            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+            <input class="mini-input" type="number" name="year" th:value="${calYear}" min="2020" max="2030" style="width:86px;" aria-label="생성 연도" data-ws-query-state="generation-year-0" data-ws-query-owner="schedule-calendar-v1">
+            <button class="rbtn acc" type="submit">법정공휴일 일괄 생성</button>
+          </form>
+          <!-- [UX48] 공휴일 업로드 — 점선 드롭존 + 양식 다운로드 + ⓘ 도움말 + 업로드 로딩 -->
+          <form th:action="@{/hr/schedules/holiday/import}" method="post" enctype="multipart/form-data"
+                class="hz-form" data-modal-size="compact" data-holiday-upload data-registration-form data-registration-title="공휴일 CSV 등록" data-registration-label="CSV 등록">
+            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+            <label class="hz-dropzone" data-hz-zone>
+              <input type="file" name="file" accept=".csv,text/csv" required hidden data-hz-input>
+              <span class="hz-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></span>
+              <span class="hz-text" data-hz-text>CSV 파일을 끌어다 놓거나 클릭해서 선택</span>
+            </label>
+            <div class="hz-actions">
+              <button class="btn primary" type="submit" data-hz-submit disabled>공휴일 업로드</button>
+              <a class="rbtn" th:href="@{/hr/schedules/holiday/template.csv}" download>CSV 양식 다운로드</a>
+              <span class="hz-help-wrap ws-help">
+                <button type="button" class="hz-help ws-help-toggle" data-hz-help data-help-toggle aria-label="공휴일 업로드 도움말" aria-expanded="false" aria-controls="holiday-import-help" aria-haspopup="dialog"><svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" aria-hidden="true" focusable="false"><path d="M11 18h2v-2h-2v2zm1-16C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm0-14c-2.21 0-4 1.79-4 4h2c0-1.1.9-2 2-2s2 .9 2 2c0 2-3 1.75-3 5h2c0-2.25 3-2.5 3-5 0-2.21-1.79-4-4-4z"/></svg></button>
+                <span class="hz-help-pop ws-help-popover" id="holiday-import-help" data-hz-help-pop data-help-popover role="dialog" aria-labelledby="holiday-import-help-title" hidden>
+                  <span class="ws-help-head"><strong id="holiday-import-help-title">공휴일 업로드 방법</strong><button type="button" class="btn primary" data-help-close>닫기</button></span>
+                  ① [CSV 양식 다운로드]로 양식을 받습니다.<br>
+                  ② 한 줄에 하나씩 <span class="date-mono">날짜,이름,구분</span> 형식으로 입력합니다.<br>
+                  &nbsp;&nbsp;· 날짜: <span class="date-mono">2026-03-04</span> 형식<br>
+                  &nbsp;&nbsp;· 구분: <b>PUBLIC</b>(법정·임시공휴일) / <b>COMPANY</b>(회사휴무), 비우면 PUBLIC<br>
+                  ③ 저장한 CSV를 점선 영역에 끌어다 놓고 [공휴일 업로드]를 누릅니다.<br>
+                  이미 등록된 날짜는 건너뛰며, 법정공휴일(2020~2030)은 왼쪽 [법정공휴일 일괄 생성]이 더 빠릅니다.
+                </span>
+              </span>
+            </div>
+          </form>
+        </div>
+        <div class="hcal-grid" data-ws-query-region="calendar">
+          <div class="hcal-month" th:each="mon : ${holidayCalendar}">
+            <h4 th:text="|${mon.month}월|">1월</h4>
+            <table class="hcal-table">
+              <thead><tr><th>일</th><th>월</th><th>화</th><th>수</th><th>목</th><th>금</th><th>토</th></tr></thead>
+              <tbody>
+                <tr th:each="week : ${mon.weeks}">
+                  <td th:each="day : ${week}">
+                    <span th:if="${day.day > 0}" class="hcal-day"
+                          th:classappend="${(day.category == 'PUBLIC' ? ' cal-pub' : (day.category == 'COMPANY' ? ' cal-com' : (day.weekend ? ' weekend' : ''))) + (day.scheduleTitles != null ? ' has-sched' : '')}"
+                          th:attr="data-cal-date=${canManageHr ? day.iso : null}"
+                          th:title="${(day.name != null and day.scheduleTitles != null) ? day.name + ' / ' + day.scheduleTitles : (day.name != null ? day.name : day.scheduleTitles)}"
+                          th:text="${day.day}">1</span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+        <section class="form-panel">
+          <div class="section-head">
+            <div class="section-left"><span class="sdot sdot-new"></span><span class="sname">일정 목록</span><span class="scnt scnt-new" th:text="${pageInfo.total}" data-ws-query-state="list-count-0">0</span></div>
+          </div>
+          <form class="admin-filter-bar schedule-filter-bar" th:action="@{/hr/schedules}" method="get" data-ws-query-filter="list-filter-0">
+            <input type="hidden" name="hq" th:value="${holidayQuery}">
+            <input type="date" name="from" th:value="${fromDate}">
+            <input type="date" name="to" th:value="${toDate}">
+            <input class="admin-search-input" name="q" th:value="${query}" placeholder="일정명 / 내용 검색">
+            <a class="btn" th:href="@{/hr/schedules(hq=${holidayQuery})}" data-ws-query-reset="">초기화</a>
+          </form><div data-ws-query-region="list-results-0">
+
+          <div class="table-scroll">
+            <table class="rt schedule-table">
+              <thead>
+              <tr><th>색상</th><th>기간</th><th>일정명</th><th>등록자</th><th>관리</th></tr>
+              </thead>
+              <tbody>
+              <tr th:each="schedule : ${schedules}">
+                <td><span class="schedule-color-dot" th:style="'--schedule-color:' + ${schedule.color}" th:title="${schedule.color}"></span></td>
+                <td th:text="|${#temporals.format(schedule.startAt, 'yyyy-MM-dd HH:mm')} ~ ${#temporals.format(schedule.endAt, 'yyyy-MM-dd HH:mm')}|">기간</td>
+                <td th:text="${schedule.title}">일정명</td>
+                <td th:text="${schedule.createdByName ?: '-'}">등록자</td>
+                <td>
+                  <div class="act-wrap">
+                    <button class="rbtn acc" type="button"
+                            data-schedule-view data-edit-link
+                            th:data-id="${schedule.id}"
+                            th:data-title="${schedule.title}"
+                            th:data-description="${schedule.description}"
+                            th:data-start="${#temporals.format(schedule.startAt, 'yyyy-MM-dd''T''HH:mm')}"
+                            th:data-end="${#temporals.format(schedule.endAt, 'yyyy-MM-dd''T''HH:mm')}"
+                            th:data-color="${schedule.color}" th:text="${canManageHr ? '수정' : '보기'}"
+                            th:attr="data-edit-delete-form=|#schedule-delete-${schedule.id}|,data-edit-delete-slot-target='#scheduleDeleteSlot'">보기</button>
+                    <form th:if="${canManageHr}" th:action="@{|/hr/schedules/${schedule.id}/delete|}" method="post"
+                          th:id="|schedule-delete-${schedule.id}|" data-edit-delete-owner="scheduleEditForm" data-edit-delete-source hidden
+                          data-confirm-message="이 일정을 삭제하시겠습니까?" data-confirm-ok="삭제" data-confirm-danger="true">
+                      <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                      <button class="rbtn del" type="submit">삭제</button>
+                    </form>
+                  </div>
+                </td>
+              </tr>
+              <tr class="empty-tr" th:if="${#lists.isEmpty(schedules)}"><td colspan="5">등록된 일정이 없습니다.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div th:replace="~{fragments/app :: pagination(${pageInfo}, ${pageBaseUrl})}"></div>
+        
+</div></section>
+        </div>
+        <div data-tab-panel="holidays" role="tabpanel" hidden>
+        <section class="form-panel">
+          <div class="section-head">
+            <div class="section-left"><span class="sdot sdot-done"></span><span class="sname">휴무일 목록</span><span class="scnt scnt-done" th:text="${holidayTotal}" data-ws-query-state="list-count-1">0</span></div>
+          </div>
+          <form class="admin-filter-bar schedule-filter-bar" th:action="@{/hr/schedules}" method="get" data-ws-query-filter="list-filter-1">
+            <input type="hidden" name="q" th:value="${query}">
+            <input type="date" name="from" th:value="${fromDate}">
+            <input type="date" name="to" th:value="${toDate}">
+            <input class="admin-search-input" name="hq" th:value="${holidayQuery}" placeholder="휴무명 / 일자 / 등록자 검색">
+            <a class="btn" th:href="@{/hr/schedules(q=${query})}" data-ws-query-reset="">초기화</a>
+          </form><div data-ws-query-region="list-results-1">
+
+          <div class="table-scroll">
+            <table class="rt schedule-table">
+              <thead>
+              <tr><th>#</th><th>일자</th><th>구분</th><th>휴무명</th><th>등록자</th><th th:if="${canManageHr}">삭제</th></tr>
+              </thead>
+              <tbody>
+              <tr th:each="holiday, stat : ${holidays}">
+                <td th:text="${stat.count + (holidayPageInfo != null ? (holidayPageInfo.from - 1) : 0)}">1</td>
+                <td th:text="${holiday.holidayDate}">2026-05-01</td>
+                <td><span class="hcal-chip" th:classappend="${holiday.publicHoliday} ? 'pub' : 'com'"
+                          th:text="${holiday.publicHoliday} ? '법정' : '회사'">법정</span></td>
+                <td th:text="${holiday.name}">휴무</td>
+                <td th:text="${holiday.createdByName ?: '-'}">등록자</td>
+                <td th:if="${canManageHr}">
+                  <button class="rbtn" type="button" data-holiday-edit data-edit-link
+                          th:data-date="${holiday.holidayDate}" th:data-name="${holiday.name}" th:data-category="${holiday.publicHoliday ? 'PUBLIC' : 'COMPANY'}"
+                          th:attr="data-edit-delete-form=|#holiday-delete-${holiday.holidayDate}|,data-edit-delete-slot-target='#holidayDeleteSlot'">수정</button>
+                  <form th:action="@{/hr/schedules/holiday/delete}" method="post"
+                        th:id="|holiday-delete-${holiday.holidayDate}|" data-edit-delete-owner="holidayEditForm" data-edit-delete-source hidden
+                        data-confirm-message="이 항목을 삭제하시겠습니까?" data-confirm-ok="삭제" data-confirm-danger="true">
+                    <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                    <input type="hidden" name="holidayDate" th:value="${holiday.holidayDate}">
+                    <button class="rbtn del" type="submit">삭제</button>
+                  </form>
+                </td>
+              </tr>
+              <tr class="empty-tr" th:if="${#lists.isEmpty(holidays)}"><td th:colspan="${canManageHr ? 6 : 5}">조회 기간에 등록된 휴무일이 없습니다.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div th:replace="~{fragments/app :: pagination(${holidayPageInfo}, ${holidayPageBaseUrl})}"></div>
+        
+</div></section>
+        </div>
+      </div>
+
+      <div class="schedule-lists-grid" data-ws-query-contract="schedule-lists-v1" data-ws-query-path="self" data-ws-query-params="from to q hq page hpage" data-ws-query-context="shared-date-range">
+
+      </div>
+    
+<div class="schedule-edit-modal" data-schedule-modal hidden>
+  <div class="schedule-edit-dialog" role="dialog" aria-modal="true" aria-labelledby="scheduleModalTitle">
+    <div class="schedule-edit-head ws-edit-heading">
+      <strong id="scheduleModalTitle" data-schedule-modal-title>일정 추가</strong><div class="ws-edit-actions"><button class="btn" type="button" data-schedule-edit hidden>수정하기</button><button class="btn" type="button" data-schedule-edit-cancel hidden>취소</button><button class="btn primary ws-edit-save" type="submit" form="scheduleEditForm" data-schedule-submit>등록</button></div>
+      <button type="button" data-schedule-close aria-label="닫기"><svg th:replace="~{fragments/icons :: i('close')}"></svg></button>
+    </div>
+    <form id="scheduleEditForm" method="post" data-schedule-form th:data-create-action="@{/hr/schedules}" th:data-can-manage="${canManageHr}">
+      <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+      <div class="schedule-edit-body">
+        <label class="field">일정명
+          <input name="title" maxlength="200" required data-schedule-title>
+        </label>
+        <div class="form-grid two">
+          <label class="field">시작
+            <input type="datetime-local" name="startAt" required data-schedule-start>
+          </label>
+          <label class="field">종료
+            <input type="datetime-local" name="endAt" required data-schedule-end>
+          </label>
+        </div>
+        <label class="field">표시 색상
+          <input type="color" name="color" value="#2563eb" data-schedule-color>
+        </label>
+        <label class="field">내용
+          <textarea class="form-textarea" name="description" rows="4" data-schedule-description></textarea>
+        </label>
+      </div>
+      <div class="schedule-edit-foot">
+        
+        
+        
+        <button class="rbtn" type="button" data-schedule-close>닫기</button>
+      </div>
+    </form>
+    <div id="scheduleDeleteSlot" data-edit-delete-slot></div>
+  </div>
+</div>
+<div class="schedule-edit-modal" data-holiday-modal hidden>
+  <div class="schedule-edit-dialog compact" role="dialog" aria-modal="true" aria-labelledby="holidayModalTitle">
+    <div class="schedule-edit-head ws-edit-heading">
+      <strong id="holidayModalTitle">휴무일 추가</strong><div class="ws-edit-actions"><button class="btn primary ws-edit-save" type="submit" form="holidayEditForm" data-holiday-submit>등록</button></div>
+      <button type="button" data-holiday-close aria-label="닫기"><svg th:replace="~{fragments/icons :: i('close')}"></svg></button>
+    </div>
+    <form id="holidayEditForm" method="post" th:action="@{/hr/schedules/holiday}">
+      <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+      <div class="schedule-edit-body">
+        <label class="field">구분
+          <select name="category">
+            <option value="COMPANY" selected>회사휴무</option>
+            <option value="PUBLIC">공휴일 (법정/대체)</option>
+          </select>
+        </label>
+        <label class="field">일자
+          <input type="date" name="holidayDate" required>
+        </label>
+        <label class="field">이름
+          <input name="name" maxlength="100" placeholder="창립기념일 / 신정 / 어린이날 등" required>
+        </label>
+      </div>
+      <div class="schedule-edit-foot">
+        
+        <button class="rbtn" type="button" data-holiday-close>닫기</button>
+      </div>
+    </form>
+    <div id="holidayDeleteSlot" data-edit-delete-slot></div>
+  </div>
+</div>
+<div class="schedule-edit-modal" data-cal-pick-modal hidden th:if="${canManageHr}">
+  <div class="schedule-edit-dialog compact" role="dialog" aria-modal="true">
+    <div class="schedule-edit-head">
+      <strong data-cal-pick-date>날짜</strong>
+      <button type="button" data-cal-pick-close aria-label="닫기"><svg th:replace="~{fragments/icons :: i('close')}"></svg></button>
+    </div>
+    <div class="schedule-edit-body" style="display:flex;gap:10px;">
+      <button class="btn primary" type="button" data-cal-pick-schedule style="flex:1;">일정 추가</button>
+      <button class="btn" type="button" data-cal-pick-holiday style="flex:1;">휴무일 추가</button>
+    </div>
+  </div>
+</div>
+</div>
+  </main>
+</div>
+
+
+
+
+
+<!-- [UX26] 날짜 클릭 → 추가할 항목 선택 -->
+
+
+<script th:src="@{/js/worksystem-schedules.js}"></script>
+</body>
+</html>

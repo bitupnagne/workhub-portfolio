@@ -1,0 +1,146 @@
+spring:
+  application:
+    name: workhub
+  # [A-1] Java 21 Virtual Threads — 동시 요청 처리량 향상 + 스레드 메모리 감소.
+  threads:
+    virtual:
+      enabled: true
+  datasource:
+    url: ${DB_URL:jdbc:mariadb://localhost:3306/workhub?characterEncoding=UTF-8&serverTimezone=Asia/Seoul&useSSL=false&allowPublicKeyRetrieval=true}
+    username: ${DB_USER:workhub}
+    password: ${DB_PASSWORD:}
+    driver-class-name: org.mariadb.jdbc.Driver
+    hikari:
+      maximum-pool-size: 10
+      connection-timeout: 30000
+      # [A-4] 풀 누수 사전 감지(30초 이상 빌려간 connection은 stack trace 로깅)
+      leak-detection-threshold: 30000
+      # 유휴 connection 끊김 방지 (방화벽/네트워크 idle timeout 회피)
+      keepalive-time: 60000
+      idle-timeout: 600000
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+    # V26 등의 checksum이 idempotent 패턴 보강으로 변경되었을 때 자동 복구.
+    # 첫 부팅 시 history의 checksum만 갱신하고 마이그레이션은 정상 실행됨.
+    repair-on-migrate: true
+  thymeleaf:
+    cache: false
+    encoding: UTF-8
+    mode: HTML
+  mvc:
+    hiddenmethod:
+      filter:
+        enabled: true
+  servlet:
+    multipart:
+      # 윈도우앱 릴리스 FULL(exe ~100MB)+Patch(zip)를 한 번에 업로드할 수 있도록 상향.
+      max-file-size: 500MB
+      max-request-size: 600MB
+      # 로그인/기타 일반 컨트롤러가 multipart content-type 요청을 받아도 즉시 parse하지 않음.
+      # 컨트롤러가 명시적으로 MultipartFile을 요구할 때만 parse → 'Stream ended unexpectedly' 500 차단.
+      resolve-lazily: true
+  # [B-6] 정적 리소스에 강한 캐시 (7일 + cachePublic). ResourceHttpRequestHandler가 자동 ETag도 발급.
+  # [B-7] 콘텐츠 해시 기반 버저닝: @{/css/..}, @{/js/..} URL이 내용 변경 시 자동으로 바뀌어(파일명에 해시)
+  #       브라우저가 옛 JS/CSS를 캐시하는 문제를 근본 차단(강한 새로고침 불필요).
+  web:
+    resources:
+      chain:
+        enabled: true
+        strategy:
+          content:
+            enabled: true
+            paths: /**
+      cache:
+        cachecontrol:
+          max-age: 7d
+          cache-public: true
+        use-last-modified: true
+
+app:
+  # [LOG-1] 로그 디렉터리. 기본값은 상대경로라 로컬/윈도우에서도 그대로 뜬다.
+  #   운영은 application-prod.yml이 /var/log/workhub 으로 덮는다.
+  log:
+    dir: ${APP_LOG_DIR:logs}
+  # [BOOT-1] 신규 설치 시 슈퍼관리자 1개 생성(SuperAdminBootstrap).
+  #   값이 비어 있으면 아무 동작도 하지 않으므로 기존 운영 서버에는 영향이 없다.
+  bootstrap:
+    super-admin:
+      username: ${SUPER_ADMIN_USERNAME:}
+      password: ${SUPER_ADMIN_PASSWORD:}
+      name: ${SUPER_ADMIN_NAME:관리자}
+  deploy-sso:
+    base-url: ${DEPLOY_SYSTEM_URL:http://localhost:9090}
+    shared-secret: ${DEPLOY_SSO_SHARED_SECRET:change-deploy-sso-secret}
+  upload:
+    profile-dir: ${PROFILE_IMAGE_DIR:/opt/workhub/uploads/profile-images}
+    trip-receipt-dir: ${TRIP_RECEIPT_DIR:/opt/workhub/uploads/trip-receipts}
+    signature-dir: ${SIGNATURE_IMAGE_DIR:/opt/workhub/uploads/signatures}
+    notice-dir: ${NOTICE_IMAGE_DIR:/opt/workhub/uploads/notice-images}
+    message-attachment-dir: ${MESSAGE_ATTACHMENT_DIR:/opt/workhub/message-attachments}
+    project-attachment-dir: ${PROJECT_ATTACHMENT_DIR:/opt/workhub/project-attachments}
+    release-dir: ${APP_RELEASE_DIR:/opt/workhub/releases}
+    approval-document-dir: ${APPROVAL_DOCUMENT_DIR:/opt/workhub/approval-documents}
+    logo-dir: ${LOGO_DIR:/opt/workhub/system-logos}
+  accounts:
+    # 신규 등록·비밀번호 초기화에 쓰는 초기 비밀번호(12자 이상). 비어 있으면 등록·초기화가 거부된다.
+    initial-password: ${WORKHUB_INITIAL_PASSWORD:}
+  portfolio:
+    # 공개 데모 모드 — 켜면 가상 계정만 활성화하고 계정·보안 설정, 설치 파일 배포, 외부 연동을 막는다.
+    public-demo: ${PORTFOLIO_PUBLIC_DEMO:false}
+    demo-password: ${PORTFOLIO_DEMO_PASSWORD:}
+    storage-root: ${PORTFOLIO_STORAGE_ROOT:/app/data}
+    storage-max-bytes: ${PORTFOLIO_STORAGE_MAX_BYTES:268435456}
+  anonymity:
+    # 진짜 익명용 서버 비밀키. DB에 저장하지 않고 환경변수로만 주입(운영 시 ANONYMITY_SECRET 필수).
+    secret: ${ANONYMITY_SECRET:change-anonymity-secret}
+
+mybatis:
+  mapper-locations: classpath:/mapper/**/*.xml
+  type-aliases-package: com.portfolio.worksystem.model
+  configuration:
+    map-underscore-to-camel-case: true
+
+server:
+  port: ${SERVER_PORT:8080}
+  tomcat:
+    # soft-submit는 폼을 FormData(=multipart)로 전송 → 행이 많은 폼은 part 수가 많아져
+    # 기본 한도(약 50)를 넘으면 413이 발생. 넉넉히 상향.
+    # (멀티파트 part 도 파라미터로 카운트되므로 max-parameter-count 를 part 한도보다 크게 둠)
+    max-part-count: 1000
+    max-parameter-count: 2000
+  servlet:
+    session:
+      cookie:
+        name: OFFICESESSION
+        same-site: lax
+        http-only: true
+        # 폐쇄망 HTTP 운영은 false 유지. TLS(HTTPS) 도입/외부 노출 시 SESSION_COOKIE_SECURE=true 로 켠다.
+        secure: ${SESSION_COOKIE_SECURE:false}
+      timeout: 30m
+  # [A-3] 정적 리소스 응답 압축 — CSS/JS/HTML/JSON/SVG 트래픽 60~70% 감소.
+  compression:
+    enabled: true
+    mime-types: text/html,text/css,application/javascript,application/json,image/svg+xml,text/plain
+    min-response-size: 1024
+
+# [A-5] Spring Actuator — 운영 가시성 (health/info/metrics만 노출, env/configprops 등 민감 정보는 비공개)
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: when-authorized
+      probes:
+        enabled: true
+  info:
+    env:
+      enabled: true
+
+logging:
+  level:
+    com.portfolio.worksystem: INFO
+    org.springframework.security: INFO

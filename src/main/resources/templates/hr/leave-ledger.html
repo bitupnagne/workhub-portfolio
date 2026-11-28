@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>연차 관리</title>
+  <link rel="icon" type="image/svg+xml" th:href="@{/img/AppLogoMini.svg}">
+  <link rel="stylesheet" th:href="@{/css/worksystem.css}">
+  <!-- 페이지 이동 화면 전환 오류 정리 — 첫 화면 그리기 전에 실행돼야 해서 head 에 둔다 -->
+  <script th:src="@{/js/worksystem-view-transition.js}"></script>
+</head>
+<body>
+<div class="app">
+  <div th:replace="~{fragments/app :: sidebar}"></div>
+  <main>
+    <div th:replace="~{fragments/app :: topbar}"></div>
+    <div class="content" data-ws-query-contract="hr-leave-ledger-v1" data-ws-query-path="self" data-ws-query-params="year q page" data-ws-query-context="default">
+      <div class="banner ok" th:if="${message}" th:text="${message}"></div>
+      <div class="banner err" th:if="${error}" th:text="${error}"></div>
+
+      <div data-tabs="tab">
+        <div class="ws-tabs" role="tablist">
+          <button type="button" data-tab="ledger" role="tab">연차 원장</button>
+          <button type="button" data-tab="adjust" role="tab">조정 이력</button>
+          <button type="button" data-tab="policy" role="tab">부여 기준</button>
+        </div>
+        <div data-tab-panel="ledger" role="tabpanel">
+      <!-- [A5] 연차 원장 — 부여/조정/사용/잔여 -->
+      <section class="section-block">
+        <div class="section-header no-caret ledger-section-head">
+          <div class="section-left">
+            <span class="sdot sdot-new"></span>
+            <span class="sname" th:text="|${ledgerYear}년 연차 원장|" data-ws-query-state="ledger-heading-0">2026년 연차 원장</span>
+            <span class="scnt scnt-new" th:text="${ledgerTotal}" data-ws-query-state="ledger-heading-1">0</span>
+            <!-- 부여 기준은 정책(V77)에 따라 달라진다. 문구를 고정해 두면 회계연도 기준일 때 틀린 설명이 된다. -->
+            <span class="muted ledger-heading-note" style="margin-left:10px;font-size:11px;"
+                  th:text="|부여 = ${accrualPolicy.fiscalYear ? '회계연도' : '입사일'} 기준 자동계산${accrualPolicy.maxAnnualDays != null ? '(상한 ' + accrualPolicy.maxAnnualDays + '일)' : ''} · 잔여 = 부여 + 조정 − 사용|" data-ws-query-state="ledger-heading-2">부여 = 입사일 기준 자동계산 · 잔여 = 부여 + 조정 − 사용</span>
+          </div>
+          <div class="section-actions">
+            <form th:action="@{/hr/leave/ledger}" method="get" class="inline-form" data-ws-query-filter="filter-0">
+              <select class="mini-input" name="year">
+                <option th:each="y : ${#numbers.sequence(ledgerYear - 2, ledgerYear + 1)}"
+                        th:value="${y}" th:text="|${y}년|" th:selected="${y == ledgerYear}">연도</option>
+              </select>
+              <input class="mini-input" name="q" th:value="${query}" placeholder="이름 / 팀 검색">
+              <button class="rbtn" type="submit">조회</button>
+            </form>
+            <!-- [A7] 연차 사용 대장 CSV -->
+            <a class="rbtn acc" th:href="@{/hr/leave/ledger/csv(year=${ledgerYear})}" data-ws-query-state="ledger-link-0">CSV</a>
+          </div>
+        </div><div data-ws-query-region="ledger-results">
+
+        <div class="table-scroll">
+          <table class="rt board-table">
+            <thead>
+              <tr><th>팀</th><th>이름</th><th>직급</th><th>입사일</th><th>자동 부여</th><th>조정</th><th>사용</th><th>잔여</th><th>연차수당</th><th>비고</th><th>관리</th></tr>
+            </thead>
+            <tbody>
+              <tr class="empty-tr" th:if="${#lists.isEmpty(ledgerRows)}"><td colspan="11">조회 조건에 맞는 직원이 없습니다.</td></tr>
+              <tr th:each="row : ${ledgerRows}">
+                <td th:text="${row.teamName ?: '-'}">팀</td>
+                <td th:text="${row.memberName}">이름</td>
+                <td th:text="${row.gradeName ?: '-'}">3급</td>
+                <td th:text="${row.hireDate ?: '-'}">입사일</td>
+                <td th:text="${#numbers.formatDecimal(row.entitlement, 1, 1)}">15.0</td>
+                <td th:classappend="${row.adjusted.signum() > 0} ? 'ok-text' : (${row.adjusted.signum() < 0} ? 'err-text' : '')"
+                    th:text="${#numbers.formatDecimal(row.adjusted, 1, 1)}">0.0</td>
+                <td th:text="${#numbers.formatDecimal(row.used, 1, 1)}">0.0</td>
+                <td><b th:text="${#numbers.formatDecimal(row.remaining, 1, 1)}">15.0</b></td>
+                <!-- 금액이 null 이면 '계산 못 함'이다(직급 미지정 또는 통상시급 미설정). 연차수당 = 연말 통상시급 × 기준 시간 × 잔여일. 0원과 구분해 보여 준다. -->
+                <td>
+                  <b th:if="${row.allowance != null}"
+                     th:text="|${#numbers.formatInteger(row.allowance, 0, 'COMMA')}원|">900,000원</b>
+                  <span th:if="${row.allowance == null}" class="err-text" style="font-size:11px;"
+                        th:text="${row.gradeName == null} ? '직급 미지정' : '통상시급 미설정'">통상시급 미설정</span>
+                  <small class="muted ll-daily" th:if="${row.dailyAmount != null}"
+                         th:text="|1일 ${#numbers.formatInteger(row.dailyAmount, 0, 'COMMA')}원|">1일 120,000원</small>
+                </td>
+                <td class="muted" th:text="${row.note ?: ''}" style="font-size:11px;"></td>
+                <td>
+                  <button class="rbtn acc" type="button" data-ll-adjust
+                          th:data-user-id="${row.userId}"
+                          th:data-user-name="|${row.teamName != null ? row.teamName + ' · ' : ''}${row.memberName}|"
+                          th:data-remaining="${#numbers.formatDecimal(row.remaining, 1, 1)}">조정</button>
+                </td>
+              </tr>
+            </tbody>
+            <!-- 합계는 현재 페이지가 아니라 <검색 결과 전체> 기준이다. -->
+            <tfoot th:if="${!#lists.isEmpty(ledgerRows)}">
+              <tr>
+                <td colspan="7" style="text-align:right"><b>검색 결과 전체 합계</b></td>
+                <td><b th:text="${#numbers.formatDecimal(unusedTotal, 1, 1)}">5.0</b></td>
+                <td>
+                  <b th:text="|${#numbers.formatInteger(allowanceTotal, 0, 'COMMA')}원|">900,000원</b>
+                  <span th:if="${allowanceUnsettled > 0}" class="err-text" style="display:block;font-size:11px;"
+                        th:text="|${allowanceUnsettled}명 미산출 — 합계에서 빠짐|">2명 미산출</span>
+                </td>
+                <td colspan="2"></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+        <div th:replace="~{fragments/app :: pagination(${pageInfo}, ${pageBaseUrl})}"></div>
+      
+</div></section>
+        </div>
+        <div data-tab-panel="adjust" role="tabpanel" hidden>
+      <!-- [A5] 조정 이력 -->
+      <section class="section-block" data-ws-query-region="adjustment-history-0">
+        <div class="section-header no-caret">
+          <div class="section-left">
+            <span class="sdot sdot-done"></span>
+            <span class="sname" th:text="|${ledgerYear}년 조정 이력|">조정 이력</span>
+            <span class="scnt scnt-done" th:text="${adjustmentTotal}">0</span>
+          </div>
+        </div>
+        <div class="table-scroll">
+          <table class="rt board-table">
+            <thead><tr><th>#</th><th>일시</th><th>팀</th><th>이름</th><th>조정</th><th>사유</th><th>조정자</th></tr></thead>
+            <tbody>
+              <tr class="empty-tr" th:if="${#lists.isEmpty(ledgerAdjustments)}"><td colspan="7">조정 이력이 없습니다.</td></tr>
+              <tr th:each="adj, stat : ${ledgerAdjustments}">
+                <td th:text="${stat.count}">1</td>
+                <td><span class="date-mono" th:text="${#temporals.format(adj.createdAt, 'yyyy-MM-dd HH:mm')}">일시</span></td>
+                <td th:text="${adj.teamName ?: '-'}">팀</td>
+                <td th:text="${adj.memberName}">이름</td>
+                <td th:classappend="${adj.deltaDays.signum() > 0} ? 'ok-text' : 'err-text'"
+                    th:text="|${adj.deltaDays.signum() > 0 ? '+' : ''}${#numbers.formatDecimal(adj.deltaDays, 1, 1)}일|">+1.0일</td>
+                <td th:text="${adj.reason}">사유</td>
+                <td th:text="${adj.adjustedByName ?: '-'}">조정자</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div th:replace="~{fragments/app :: pagination(${adjPageInfo}, ${adjPageBaseUrl})}"></div>
+      </section>
+        </div>
+        <div data-tab-panel="policy" role="tabpanel" hidden>
+      <!-- [D3/UX2] 연차 부여 기준 — readonly 요약 카드, ⚙로 수정 모달 -->
+      <section class="pset-card">
+        <div class="pset-head">
+          <span class="policy-chip">부여 기준</span>
+          <h3>연차 부여 기준</h3>
+          <button class="pset-gear" type="button" data-modal-open="#modalAccrual" title="부여 기준 수정"><svg class="btn-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+        </div>
+        <div class="pset-body">
+          <dl class="pset-kv">
+            <div>
+              <dt>현재 기준</dt>
+              <dd th:text="${accrualPolicy.fiscalYear ? '회계연도 기준' : '입사일 기준'}">입사일 기준</dd>
+            </div>
+            <div th:if="${accrualPolicy.fiscalYear}">
+              <dt>적용 시작</dt>
+              <dd th:text="|${accrualPolicy.effectiveFromYear}년부터|">2026년부터</dd>
+            </div>
+            <div>
+              <dt>부여 상한</dt>
+              <dd th:text="${accrualPolicy.maxAnnualDays != null ? accrualPolicy.maxAnnualDays + '일' : '없음'}">없음</dd>
+            </div>
+            <div th:if="${accrualPolicy.updatedByName != null}">
+              <dt>최종 변경</dt>
+              <dd th:text="|${accrualPolicy.updatedByName} · ${#temporals.format(accrualPolicy.updatedAt, 'yyyy-MM-dd')}|">-</dd>
+            </div>
+          </dl>
+          <p class="pset-desc" th:text="${accrualPolicy.fiscalYear
+              ? '1/1 근속 1년 이상 직원은 연초에 부여가 확정되어 연중 변하지 않습니다. 입사 1년 미만 월차(매월 +1)는 그대로 발생합니다.'
+              : '입사기념일이 지나면 그 시점부터 부여일수가 늘어납니다(연중 증가). 입사 1년 미만 월차(매월 +1)는 그대로 발생합니다.'}">설명</p>
+          <p class="pset-desc" th:text="${accrualPolicy.maxAnnualDays != null
+              ? '가산휴가를 포함한 총 부여일수가 ' + accrualPolicy.maxAnnualDays + '일을 넘지 않습니다. 근속 1년 미만 월차에는 적용되지 않습니다.'
+              : '부여 상한이 없어 근속이 길수록 계속 늘어납니다. 근로기준법 제60조 4항은 가산 포함 25일을 한도로 둡니다.'}">상한 설명</p>
+        </div>
+      </section>
+        </div>
+      </div>
+
+
+
+
+    </div>
+  </main>
+</div>
+
+<!-- [A5] 연차 조정 모달 -->
+<div class="schedule-edit-modal" data-ll-modal hidden>
+  <div class="schedule-edit-dialog compact" role="dialog" aria-modal="true" aria-labelledby="llModalTitle">
+    <div class="schedule-edit-head">
+      <strong id="llModalTitle">연차 조정 — <span data-ll-modal-name>이름</span></strong>
+      <button type="button" data-ll-close aria-label="닫기"><svg th:replace="~{fragments/icons :: i('close')}"></svg></button>
+    </div>
+    <form th:action="@{/hr/leave/ledger/adjust}" method="post"
+          data-confirm-message="연차를 조정하시겠습니까? 이력이 남습니다." data-confirm-ok="조정">
+      <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+      <input type="hidden" name="userId" data-ll-form-user>
+      <input type="hidden" name="year" th:value="${ledgerYear}" data-ws-query-owner="hr-leave-ledger-v1" data-ws-query-state="adjustment-year">
+      <div class="schedule-edit-body">
+        <p class="muted" style="margin:0 0 4px;font-size:12px;">현재 잔여: <b data-ll-modal-remaining>0</b>일</p>
+        <label class="field">조정 일수 (+ 추가 부여 / − 차감)
+          <input type="number" name="deltaDays" step="0.5" min="-50" max="50" required placeholder="예: 1 또는 -0.5">
+        </label>
+        <label class="field">사유 (필수)
+          <textarea class="form-textarea" name="reason" rows="2" required maxlength="500" placeholder="예: 장기근속 보상 연차 부여"></textarea>
+        </label>
+      </div>
+      <div class="schedule-edit-foot">
+        <button class="btn primary" type="submit">조정</button>
+        <button class="rbtn" type="button" data-ll-close>닫기</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- [UX2] 연차 부여 기준 수정 모달 -->
+<div class="schedule-edit-modal" data-settings-modal id="modalAccrual" hidden>
+  <div class="schedule-edit-dialog compact" role="dialog" aria-modal="true">
+    <div class="schedule-edit-head">
+      <strong>연차 부여 기준</strong>
+      <button type="button" data-modal-close aria-label="닫기"><svg th:replace="~{fragments/icons :: i('close')}"></svg></button>
+    </div>
+    <form th:action="@{/hr/leave/ledger/policy}" method="post" data-edit-form data-edit-title="연차 부여 기준"
+          data-confirm-message="연차 부여 기준을 변경하고 대상 연도의 원장 부여일수를 재계산합니다. 계속하시겠습니까?"
+          data-confirm-ok="변경" data-confirm-danger="true">
+      <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+      <div class="schedule-edit-body">
+        <p class="muted" style="margin:0 0 6px;font-size:12px;">
+          <b>입사일 기준</b> — 입사기념일 경과 시점부터 부여 가산(연중 증가)<br>
+          <b>회계연도 기준</b> — 1/1 근속 1년 이상은 연초 확정(연중 불변)
+        </p>
+        <label class="field">부여 기준
+          <select name="basis">
+            <option value="HIRE_DATE" th:selected="${!accrualPolicy.fiscalYear}">입사일 기준</option>
+            <option value="FISCAL_YEAR" th:selected="${accrualPolicy.fiscalYear}">회계연도 기준</option>
+          </select>
+        </label>
+        <label class="field">적용 범위
+          <select name="scope" data-accrual-scope>
+            <option value="THIS_YEAR" th:text="|올해(${currentYear})부터|">올해부터</option>
+            <option value="FROM_YEAR">선택한 연도부터</option>
+            <option value="RETRO_ALL">전체 소급 (⚠ 과거 연도 원장도 변경)</option>
+          </select>
+        </label>
+        <label class="field" data-accrual-fromyear hidden>적용 시작 연도
+          <input type="number" name="fromYear" th:value="${currentYear}" min="2000" th:max="${currentYear + 1}">
+        </label>
+        <label class="field">부여 상한 (일)
+          <input type="number" name="maxAnnualDays" th:value="${accrualPolicy.maxAnnualDays}"
+                 min="15" max="40" placeholder="비워 두면 상한 없음">
+        </label>
+        <p class="muted" style="margin:2px 0 0;font-size:12px;">
+          가산휴가를 포함한 총 부여일수의 상한입니다. 근로기준법 제60조 4항은 <b>25일</b>을 한도로 둡니다.<br>
+          비워 두면 상한 없이 근속에 따라 계속 늘어납니다. 근속 1년 미만 월차에는 적용되지 않습니다.
+        </p>
+      </div>
+      <div class="schedule-edit-foot">
+        <button class="btn primary" type="submit">변경 + 재계산</button>
+        <button class="rbtn" type="button" data-modal-close>닫기</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script th:src="@{/js/worksystem-leave-ledger.js}"></script>
+<script th:src="@{/js/worksystem-settings-modal.js}"></script>
+<script>
+/* [UX2] 적용 범위가 '선택한 연도부터'일 때만 연도 입력 노출 */
+document.addEventListener('change', function (event) {
+  var sel = event.target.closest('[data-accrual-scope]');
+  if (!sel) return;
+  var wrap = document.querySelector('[data-accrual-fromyear]');
+  if (wrap) wrap.hidden = sel.value !== 'FROM_YEAR';
+});
+</script>
+</body>
+</html>

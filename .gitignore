@@ -1,0 +1,54 @@
+# Build outputs
+target/
+*.class
+*.jar
+*.war
+
+# Local Maven and tool downloads
+.m2/
+node_modules/
+
+# Runtime data: uploads, release payloads, logs, dumps
+uploads/
+releases/
+logs/
+output/
+.localdata/
+*.log
+*.dump
+*.sql.gz
+*-dump.sql
+backup-*.sql
+
+# Local environment and secrets (.env.example is the only tracked template)
+.env
+.env.*
+!.env.example
+docker-compose.override.yml
+*.local.yml
+*.local.yaml
+*.secret
+*.key
+*.pem
+*.p12
+*.pfx
+*.jks
+
+# Generated installers and archives
+*.exe
+*.msi
+*.zip
+*.tar.gz
+
+# IDE and OS noise
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Private notes
+HANDOFF_*.md
+PRIVATE_OPS*.md
+*.local.md

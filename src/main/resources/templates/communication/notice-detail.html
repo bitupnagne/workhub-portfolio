@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title th:text="${notice.title}">공지</title>
+  <link rel="icon" type="image/svg+xml" th:href="@{/img/AppLogoMini.svg}">
+  <link rel="stylesheet" th:href="@{/css/worksystem.css}">
+  <!-- 페이지 이동 화면 전환 오류 정리 — 첫 화면 그리기 전에 실행돼야 해서 head 에 둔다 -->
+  <script th:src="@{/js/worksystem-view-transition.js}"></script>
+</head>
+<body>
+<div class="app">
+  <div th:replace="~{fragments/app :: sidebar}"></div>
+  <main>
+    <div th:replace="~{fragments/app :: topbar}"></div>
+    <div class="content admin-page notice-detail-page">
+      <div class="banner ok" th:if="${message}" th:text="${message}"></div>
+      <div class="banner err" th:if="${error}" th:text="${error}"></div>
+      <div class="admin-title-row">
+        <div>
+          <h2>공지 상세</h2>
+        </div>
+        <a class="btn" href="javascript:history.back()">뒤로</a>
+      </div>
+
+      <article class="section-block notice-detail">
+        <header class="notice-detail-head">
+          <h1>
+            <span th:if="${poll != null and poll.open}" class="poll-chip open">투표 진행중</span>
+            <span th:if="${poll != null and poll.resultsVisible}" class="poll-chip closed">투표 종료</span>
+            <span th:text="${notice.title}">공지 제목</span>
+          </h1>
+          <div class="notice-detail-meta">
+            <span class="cmt-author-label">글작성자:</span>
+            <button th:if="${noticeAuthor != null}" type="button" class="emp-chip" data-emp-card
+                    th:attr="data-uid=${noticeAuthor.id},data-name=${noticeAuthor.name},data-team=${noticeAuthor.teamName},data-dept=${noticeAuthor.dept},data-job=${noticeAuthor.jobTitle},data-ext=${noticeAuthor.extensionNumber},data-mobile=${noticeAuthor.mobileNumber},data-email=${noticeAuthor.email},data-img=${noticeAuthor.profileImageFilename}">
+              <img th:if="${noticeAuthor.profileImageFilename != null and !#strings.isEmpty(noticeAuthor.profileImageFilename)}" class="emp-chip-img" th:src="@{/profile-images/{f}(f=${noticeAuthor.profileImageFilename})}" alt="">
+              <span th:unless="${noticeAuthor.profileImageFilename != null and !#strings.isEmpty(noticeAuthor.profileImageFilename)}" class="emp-chip-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
+              <b th:text="${noticeAuthor.name}">작성자</b>
+            </button>
+            <span th:unless="${noticeAuthor != null}" th:text="${notice.createdByName != null ? notice.createdByName : '관리자'}">관리자</span>
+            <span th:text="${#temporals.format(notice.updatedAt, 'yyyy-MM-dd HH:mm')}">2026-05-15 09:00</span>
+          </div>
+        </header>
+        <div class="notice-detail-body" th:utext="${noticeBodyHtml}"></div>
+
+        <div class="notice-poll-inline" th:if="${poll != null}">
+          <div class="poll-inline-head">
+            <strong th:text="${poll.title}">투표</strong>
+            <span class="poll-anon-badge">익명 투표</span>
+            <span class="poll-anon-badge" th:if="${!poll.includeContractors}">도급 제외</span>
+            <span class="poll-period" th:text="|${#temporals.format(poll.startDate,'yyyy-MM-dd HH:mm')} ~ ${#temporals.format(poll.endDate,'yyyy-MM-dd HH:mm')}|">기간</span>
+          </div>
+        <div class="notice-poll-body">
+          <!-- 결과 공개(종료 후) -->
+          <div th:if="${poll.resultsVisible}">
+            <div class="poll-result" th:each="o : ${poll.options}">
+              <div class="poll-result-top"><b th:text="${o.optionText}">항목</b><span th:text="|${o.voteCount}표|">0표</span></div>
+              <div class="poll-bar"><i th:style="'width:' + (${poll.participantCount} > 0 ? (${o.voteCount} * 100 / ${poll.participantCount}) : 0) + '%'"></i></div>
+            </div>
+            <p class="muted" th:text="|총 ${poll.participantCount}명 참여 · 미참여 ${poll.nonParticipantCount}명 (전체 ${poll.totalEligible}명)|">집계</p>
+          </div>
+          <!-- 진행 중: 결과 비공개 -->
+          <div th:unless="${poll.resultsVisible}">
+            <form th:if="${poll.open and !poll.voted}" th:action="@{|/notices/${notice.id}/vote|}" method="post" class="poll-vote-form">
+              <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+              <label class="poll-choice" th:each="o : ${poll.options}">
+                <input type="radio" name="optionId" th:value="${o.id}" required>
+                <span th:text="${o.optionText}">항목</span>
+              </label>
+              <button class="btn primary" type="submit">투표하기</button>
+            </form>
+            <p class="poll-state" th:if="${poll.voted}">✔ 투표를 완료했습니다.</p>
+            <p class="poll-state" th:if="${!poll.open and !poll.voted}">투표 기간이 아닙니다.</p>
+            <p class="muted" th:text="|참여 ${poll.participantCount}명 · 미참여 ${poll.nonParticipantCount}명 (전체 ${poll.totalEligible}명) · 결과는 종료 일시 이후 공개|">집계</p>
+          </div>
+        </div>
+        </div>
+      </article>
+
+      <article class="section-block notice-comments">
+        <header class="notice-detail-head">
+          <h1>댓글 <span class="cmt-cnt" th:text="${#lists.size(comments)}">0</span></h1>
+        </header>
+        <div class="cmt-list">
+          <div class="cmt-empty" th:if="${#lists.isEmpty(comments)}">첫 댓글을 남겨보세요.</div>
+          <div class="cmt-item" th:each="c : ${comments}">
+            <div class="cmt-head">
+              <span class="cmt-author-label">댓글 작성자:</span>
+              <button th:if="${c.authorUserId != null}" type="button" class="emp-chip" data-emp-card
+                      th:attr="data-uid=${c.authorUserId},data-name=${c.authorName},data-team=${c.authorTeamName},data-dept=${c.authorDept},data-job=${c.authorJobTitle},data-ext=${c.authorExtensionNumber},data-mobile=${c.authorMobileNumber},data-email=${c.authorEmail},data-img=${c.authorProfileImage}">
+                <img th:if="${c.authorProfileImage != null and !#strings.isEmpty(c.authorProfileImage)}" class="emp-chip-img" th:src="@{/profile-images/{f}(f=${c.authorProfileImage})}" alt="">
+                <span th:unless="${c.authorProfileImage != null and !#strings.isEmpty(c.authorProfileImage)}" class="emp-chip-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
+                <b th:text="${c.authorName}">작성자</b>
+              </button>
+              <span th:unless="${c.authorUserId != null}" class="emp-chip anon"><span class="emp-chip-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" y1="2" x2="22" y2="22"/></svg></span><b th:text="${c.authorName}">익명</b></span>
+              <span th:text="${#temporals.format(c.createdAt, 'yyyy-MM-dd HH:mm')}">날짜</span>
+              <form th:if="${canManageNotice}" class="cmt-del" th:action="@{|/notices/${notice.id}/comment/${c.id}/delete|}" method="post">
+                <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                <button class="rbtn del" type="submit">삭제</button>
+              </form>
+            </div>
+            <div class="cmt-body" th:text="${c.body}">내용</div>
+
+            <div class="cmt-reply" th:each="r : ${c.replies}">
+              <div class="cmt-head">
+                <span class="cmt-reply-arrow">↳</span>
+                <span class="cmt-author-label">답글 작성자:</span>
+                <button th:if="${r.authorUserId != null}" type="button" class="emp-chip" data-emp-card
+                        th:attr="data-uid=${r.authorUserId},data-name=${r.authorName},data-team=${r.authorTeamName},data-dept=${r.authorDept},data-job=${r.authorJobTitle},data-ext=${r.authorExtensionNumber},data-mobile=${r.authorMobileNumber},data-email=${r.authorEmail},data-img=${r.authorProfileImage}">
+                  <img th:if="${r.authorProfileImage != null and !#strings.isEmpty(r.authorProfileImage)}" class="emp-chip-img" th:src="@{/profile-images/{f}(f=${r.authorProfileImage})}" alt="">
+                  <span th:unless="${r.authorProfileImage != null and !#strings.isEmpty(r.authorProfileImage)}" class="emp-chip-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
+                  <b th:text="${r.authorName}">답글작성자</b>
+                </button>
+                <span th:unless="${r.authorUserId != null}" class="emp-chip anon"><span class="emp-chip-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" y1="2" x2="22" y2="22"/></svg></span><b th:text="${r.authorName}">익명</b></span>
+                <span th:text="${#temporals.format(r.createdAt, 'yyyy-MM-dd HH:mm')}">날짜</span>
+                <form th:if="${canManageNotice}" class="cmt-del" th:action="@{|/notices/${notice.id}/comment/${r.id}/delete|}" method="post">
+                  <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                  <button class="rbtn del" type="submit">삭제</button>
+                </form>
+              </div>
+              <div class="cmt-body" th:text="${r.body}">답글 내용</div>
+            </div>
+
+            <details class="cmt-reply-box">
+              <summary>답글 달기</summary>
+              <form class="cmt-form cmt-reply-form" th:action="@{|/notices/${notice.id}/comment|}" method="post">
+                <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                <input type="hidden" name="parentId" th:value="${c.id}">
+                <textarea name="body" rows="2" maxlength="1000" placeholder="답글을 입력하세요" required></textarea>
+                <div class="cmt-form-foot">
+                  <label class="check-label switch-label" th:if="${allowAnonymous}">
+                    <input type="checkbox" name="anonymous" value="true">
+                    <span class="switch-ui" aria-hidden="true"></span><span class="switch-text">익명</span>
+                  </label>
+                  <button class="btn primary" type="submit">답글 등록</button>
+                </div>
+              </form>
+            </details>
+          </div>
+        </div>
+        <form class="cmt-form" th:action="@{|/notices/${notice.id}/comment|}" method="post">
+          <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+          <textarea name="body" rows="3" maxlength="1000" placeholder="댓글을 입력하세요" required></textarea>
+          <div class="cmt-form-foot">
+            <label class="check-label switch-label" th:if="${allowAnonymous}">
+              <input type="checkbox" name="anonymous" value="true">
+              <span class="switch-ui" aria-hidden="true"></span><span class="switch-text">익명으로 작성</span>
+            </label>
+            <span class="muted" th:unless="${allowAnonymous}">이 공지는 익명 댓글이 허용되지 않습니다.</span>
+            <button class="btn primary" type="submit">댓글 등록</button>
+          </div>
+        </form>
+      </article>
+    </div>
+  </main>
+</div>
+<script>
+  document.addEventListener('click', function (e) {
+    var chip = e.target.closest('[data-emp-card]');
+    if (!chip || !window.vfShowEmployee) return;
+    var d = chip.dataset;
+    if (!d.uid) return;
+    window.vfShowEmployee({
+      userId: d.uid, name: d.name, teamName: d.team, dept: d.dept,
+      jobTitle: d.job, extensionNumber: d.ext, mobileNumber: d.mobile,
+      email: d.email, profileImageFilename: d.img
+    }, chip);
+  });
+</script>
+</body>
+</html>

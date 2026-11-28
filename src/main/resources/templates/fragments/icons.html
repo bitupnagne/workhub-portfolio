@@ -1,0 +1,11 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<body>
+<!--
+  화면 아이콘 — Google Material Icons(Apache-2.0) SVG 스프라이트(/img/icons.svg)의 한 기호.
+  쓰는 법: <svg th:replace="~{fragments/icons :: i('close')}"></svg>
+  크기는 글자 크기를 따른다(1.25em). 다르게 하려면 감싼 요소에서 .i 크기를 정한다.
+-->
+<svg th:fragment="i(name)" class="i" th:classappend="|i-${name}|" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use th:href="@{/img/icons.svg} + '#' + ${name}"></use></svg>
+</body>
+</html>

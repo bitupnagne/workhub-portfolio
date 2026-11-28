@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title th:text="${title}">직원 관리</title>
+  <link rel="icon" type="image/svg+xml" th:href="@{/img/AppLogoMini.svg}">
+  <link rel="stylesheet" th:href="@{/css/worksystem.css}">
+  <!-- 페이지 이동 화면 전환 오류 정리 — 첫 화면 그리기 전에 실행돼야 해서 head 에 둔다 -->
+  <script th:src="@{/js/worksystem-view-transition.js}"></script>
+</head>
+<body>
+<div class="app">
+  <div th:replace="~{fragments/app :: sidebar}"></div>
+  <main>
+    <div th:replace="~{fragments/app :: topbar}"></div>
+    <div class="content admin-page" data-ws-query-contract="admin-users-v1" data-ws-query-path="self" data-ws-query-params="q teamId status contractor page" th:attr="data-ws-query-context=${canManageOrganization}">
+      <div class="banner ok" th:if="${message}" th:text="${message}"></div>
+      <div class="banner err" th:if="${error}" th:text="${error}"></div>
+
+      <div class="admin-title-row">
+        <div>
+          <h2>직원 목록</h2>
+        </div>
+        <a class="btn primary" th:href="@{/admin/users/new}" data-app-form data-app-form-size="wide" data-app-form-label="직원 등록"><svg th:replace="~{fragments/icons :: i('add')}"></svg> 직원 등록</a>
+      </div>
+
+      <div class="stats-grid compact-stats" data-ws-query-state="stats">
+        <div class="stat-card sc-grad"><div class="stat-label">전체 직원</div><div class="stat-value sv-grad" th:text="${totalUserCount}">0</div><span class="stat-tag st-grad">명</span></div>
+        <div class="stat-card sc-green"><div class="stat-label">재직</div><div class="stat-value sv-green" th:text="${activeUserCount}">0</div><span class="stat-tag st-green">활성</span></div>
+        <div class="stat-card sc-red"><div class="stat-label">비활성</div><div class="stat-value sv-red" th:text="${inactiveUserCount}">0</div><span class="stat-tag st-red">계정</span></div>
+        <div class="stat-card sc-blue"><div class="stat-label" th:text="${#strings.isEmpty(query)} ? '현재 목록' : '검색 결과'">현재 목록</div><div class="stat-value sv-blue" th:text="${#lists.size(users)}">0</div><span class="stat-tag st-blue">건</span></div>
+      </div>
+
+      <section class="section-block">
+        <div class="section-header no-caret">
+          <div class="section-left">
+            <span class="sdot sdot-done"></span>
+            <span class="sname">직원 검색</span>
+          </div>
+        </div>
+        <form data-ws-query-filter="directory" class="admin-filter-bar" th:action="@{/admin/users}" method="get">
+          <input class="admin-search-input" name="q" th:value="${query}" placeholder="이름, ID, 팀, 직무, 연락처 검색">
+          <select name="teamId" aria-label="팀 필터">
+            <option value="">전체 팀</option>
+            <option th:each="team : ${teams}" th:value="${team.id}" th:selected="${teamFilter != null and team.id == teamFilter}" th:text="${team.name}">팀</option>
+          </select>
+          <select name="status" aria-label="상태 필터">
+            <option value="all" th:selected="${statusFilter == 'all'}">전체 상태</option>
+            <option value="active" th:selected="${statusFilter == 'active'}">재직</option>
+            <option value="inactive" th:selected="${statusFilter == 'inactive'}">비활성</option>
+          </select>
+          <select name="contractor" aria-label="고용 구분 필터">
+            <option value="all" th:selected="${contractorFilter == 'all'}">전체 구분</option>
+            <option value="regular" th:selected="${contractorFilter == 'regular'}">정규/일반</option>
+            <option value="contractor" th:selected="${contractorFilter == 'contractor'}">도급</option>
+          </select>
+        </form>
+      </section>
+
+      <section class="section-block">
+        <div class="section-header no-caret">
+          <div class="section-left">
+            <span class="sdot sdot-new"></span>
+            <span class="sname">직원 목록</span>
+            <span data-ws-query-state="count" class="scnt scnt-new" th:text="${#lists.size(users)}">0</span>
+          </div>
+        </div>
+        <div class="table-scroll m-desktop-only" data-ws-query-region="desktop">
+          <table class="rt admin-data-table">
+            <thead>
+            <tr>
+              <th>#</th>
+              <th>직원</th>
+              <th>사번</th>
+              <th>등급</th>
+              <th>소속</th>
+              <th>담당업무</th>
+              <th>연락처</th>
+              <th>권한</th>
+              <th>상태</th>
+              <th>관리</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr class="empty-tr" th:if="${#lists.isEmpty(users)}"><td colspan="10">조건에 맞는 직원이 없습니다.</td></tr>
+            <tr class="mr" th:each="u, stat : ${users}">
+              <td th:text="${stat.count}">1</td>
+              <td>
+                <div class="employee-cell">
+                  <span class="user-avt" th:if="${#strings.isEmpty(u.profileImageFilename)}" th:text="${#strings.substring(u.name, 0, u.name.length() > 1 ? 2 : 1)}">직원</span>
+                  <img class="user-avt-img" th:unless="${#strings.isEmpty(u.profileImageFilename)}"
+                       th:src="@{/profile-images/{filename}(filename=${u.profileImageFilename})}"
+                       th:data-file-viewer-url="@{/profile-images/{filename}(filename=${u.profileImageFilename})}"
+                       th:data-file-viewer-name="|${u.name} 프로필 사진|" alt="">
+                  <span>
+                    <b th:text="${u.name}">이름</b>
+                    <em th:text="${u.username}">username</em>
+                  </span>
+                </div>
+              </td>
+              <td th:text="${#strings.isEmpty(u.employeeNumber) ? '-' : u.employeeNumber}">EMP-00001</td>
+              <td th:text="${u.gradeName == null ? '-' : u.gradeName}">1급</td>
+              <td>
+                <b th:text="${u.teamName}">팀</b>
+                <span class="org-role-chip" th:if="${u.orgRole != null}" th:text="${u.orgRole}">팀장(개발팀)</span>
+                <div class="muted" th:text="${u.dept}">부서/직무</div>
+              </td>
+              <td th:text="${#strings.isEmpty(u.jobTitle) ? '-' : u.jobTitle}">담당업무</td>
+              <td>
+                <div th:text="${#strings.isEmpty(u.extensionNumber) ? '-' : u.extensionNumber}">내선</div>
+                <div class="muted" th:text="${#strings.isEmpty(u.mobileNumber) ? '-' : u.mobileNumber}">휴대폰</div>
+              </td>
+              <td><span class="role-chip" th:title="${T(com.portfolio.worksystem.util.RoleLabels).labels(u.roles)}" th:text="${T(com.portfolio.worksystem.util.RoleLabels).labels(u.roles)}">직원</span></td>
+              <td><span class="status-pill" th:classappend="${!u.active} ? ' danger' : (${releaseFeatures.attendanceEnabled and u.onLeaveToday} ? ' warn' : ' ok')" th:text="${releaseFeatures.attendanceEnabled ? u.employmentStatusLabel : (u.active ? '재직' : '비활성')}">재직</span></td>
+              <!-- [UX29] 단일 '수정' — 인사카드로 진입해 ⚙로 수정(즉시 모달 X) -->
+              <td><div class="act-wrap"><a class="rbtn acc" th:if="${personnelCardsAllowed}" th:href="@{/people/{id}(id=${u.id})}">수정</a></div></td>
+            </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- 모바일: 직원별 아코디언(요약 = 아바타·이름·상태, 펼치면 사번/소속/연락처/권한 + 수정) -->
+        <div class="m-emp-list" data-ws-query-region="mobile">
+          <p class="m-emp-empty" th:if="${#lists.isEmpty(users)}">조건에 맞는 직원이 없습니다.</p>
+          <details class="m-emp-acc" th:each="u : ${users}">
+            <summary>
+              <span class="user-avt m-emp-avt" th:if="${#strings.isEmpty(u.profileImageFilename)}"
+                    th:text="${#strings.substring(u.name, 0, u.name.length() > 1 ? 2 : 1)}">직원</span>
+              <img class="user-avt-img m-emp-avt" th:unless="${#strings.isEmpty(u.profileImageFilename)}"
+                   th:src="@{/profile-images/{filename}(filename=${u.profileImageFilename})}" alt="">
+              <span class="m-emp-id">
+                <b th:text="${u.name}">이름</b>
+                <em th:text="${u.username}">username</em>
+              </span>
+              <span class="m-emp-quick">
+                <span class="status-pill" th:classappend="${!u.active} ? ' danger' : (${releaseFeatures.attendanceEnabled and u.onLeaveToday} ? ' warn' : ' ok')" th:text="${releaseFeatures.attendanceEnabled ? u.employmentStatusLabel : (u.active ? '재직' : '비활성')}">재직</span>
+              </span>
+            </summary>
+            <div class="m-emp-detail">
+              <div class="m-emp-stat"><span>사번</span><b th:text="${#strings.isEmpty(u.employeeNumber) ? '-' : u.employeeNumber}">-</b></div>
+              <div class="m-emp-stat"><span>등급</span><b th:text="${u.gradeName == null ? '-' : u.gradeName}">-</b></div>
+              <div class="m-emp-stat"><span>담당업무</span><b th:text="${#strings.isEmpty(u.jobTitle) ? '-' : u.jobTitle}">-</b></div>
+              <div class="m-emp-stat m-emp-wide"><span>소속</span>
+                <b><span th:text="${u.teamName}">팀</span><span class="org-role-chip" th:if="${u.orgRole != null}" th:text="${u.orgRole}" style="margin-left:6px"></span>
+                  <span class="muted" th:if="${u.dept != null}" th:text="| · ${u.dept}|"></span></b>
+              </div>
+              <div class="m-emp-stat"><span>내선</span><b th:text="${#strings.isEmpty(u.extensionNumber) ? '-' : u.extensionNumber}">-</b></div>
+              <div class="m-emp-stat"><span>휴대폰</span><b th:text="${#strings.isEmpty(u.mobileNumber) ? '-' : u.mobileNumber}">-</b></div>
+              <div class="m-emp-stat m-emp-wide"><span>권한</span><b th:text="${T(com.portfolio.worksystem.util.RoleLabels).labels(u.roles)}">직원</b></div>
+              <a class="btn primary block" th:if="${personnelCardsAllowed}" th:href="@{/people/{id}(id=${u.id})}">수정</a>
+            </div>
+          </details>
+        </div>
+
+        <div th:replace="~{fragments/app :: pagination(${pageInfo}, ${pageBaseUrl})}"></div>
+      </section>
+    </div>
+  </main>
+</div>
+</body>
+</html>

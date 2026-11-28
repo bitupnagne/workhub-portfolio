@@ -1,0 +1,16 @@
+{
+  "name": "WorkHub",
+  "short_name": "WorkHub",
+  "description": "WorkHub 업무 시스템",
+  "start_url": "/org",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#4F46E5",
+  "orientation": "portrait-primary",
+  "lang": "ko",
+  "icons": [
+    { "src": "/img/AppLogoMini.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/img/AppLogo.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}

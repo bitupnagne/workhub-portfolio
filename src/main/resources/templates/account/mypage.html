@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title th:text="${title}">마이페이지</title>
+  <link rel="icon" type="image/svg+xml" th:href="@{/img/AppLogoMini.svg}">
+  <link rel="stylesheet" th:href="@{/css/worksystem.css}">
+  <!-- 페이지 이동 화면 전환 오류 정리 — 첫 화면 그리기 전에 실행돼야 해서 head 에 둔다 -->
+  <script th:src="@{/js/worksystem-view-transition.js}"></script>
+</head>
+<body>
+<div class="app">
+  <div th:replace="~{fragments/app :: sidebar}"></div>
+  <main>
+    <div th:replace="~{fragments/app :: topbar}"></div>
+    <div class="content admin-page mypage-page">
+      <div class="banner ok" th:if="${message}" th:text="${message}"></div>
+      <div class="banner err" th:if="${error}" th:text="${error}"></div>
+
+      <div data-tabs="tab">
+        <div class="ws-tabs" role="tablist">
+          <button type="button" data-tab="info" role="tab">내 정보</button>
+          <button type="button" data-tab="security" role="tab">보안</button>
+          <button type="button" data-tab="signature" role="tab" th:if="${releaseFeatures.attendanceEnabled}">서명</button>
+          <button type="button" data-tab="delegate" role="tab" th:if="${showDelegations}">부재·대리</button>
+          <button type="button" data-tab="link" role="tab" th:if="${releaseFeatures.deployEnabled}">연동</button>
+        </div>
+        <div data-tab-panel="info" role="tabpanel">
+      <!-- [UX31] 일반 사용자는 본인 정보/계정 설정을 이 화면에서, 휴가·근태 내역은 '휴가·근태' 메뉴에서 -->
+      <section class="profile-card profile-card-manage mypage-profile-card">
+        <div class="profile-photo-wrap">
+          <div class="profile-avatar" data-profile-current th:if="${#strings.isEmpty(currentUser.profileImageFilename)}" th:text="${#strings.substring(currentUser.name, 0, currentUser.name.length() > 1 ? 2 : 1)}">사용</div>
+          <img class="profile-photo" th:unless="${#strings.isEmpty(currentUser.profileImageFilename)}"
+               th:src="@{/profile-images/{filename}(filename=${currentUser.profileImageFilename})}"
+               th:data-file-viewer-url="@{/profile-images/{filename}(filename=${currentUser.profileImageFilename})}"
+               data-profile-current
+               data-file-viewer-name="프로필 사진"
+               alt="프로필 사진">
+          <img class="profile-photo profile-photo-preview" data-profile-preview hidden alt="선택한 프로필 사진 미리보기">
+        </div>
+        <div class="profile-main">
+          <h2 th:text="${currentUser.name}">사용자</h2>
+          <p th:text="${currentUser.username}">username</p>
+          <!--/* 소속과 부서의 빈 값은 대체 표기로 표시한다. */-->
+          <div class="muted" th:text="|${currentUser.teamName ?: '소속 없음'} · ${currentUser.dept ?: '-'}|">팀 · 부서</div>
+          <div class="resume-meta" th:if="${canViewMemberHrOverview}">
+            <span>사번 <b th:text="${currentUser.employeeNumber ?: '-'}">-</b></span>
+            <span>입사일 <b th:text="${currentUser.hireDate ?: '-'}">-</b></span>
+            <span th:if="${releaseFeatures.attendanceEnabled}">올해 연차 잔여 <b th:text="|${myRemainingLeave}일|">15일</b></span>
+          </div>
+          <a class="rbtn mypage-card-link" th:if="${personnelCardsAllowed}" th:href="@{/people/me}">내 인사카드 전체 보기 <span aria-hidden="true"><svg th:replace="~{fragments/icons :: i('chevron_right')}"></svg></span></a>
+        </div>
+        <div class="mypage-photo-actions ws-inline-edit-surface">
+          <div class="section-head ws-edit-surface-head"><h3>프로필 사진</h3></div>
+          <form data-edit-form class="profile-upload-form" th:action="@{/mypage/profile-image}" method="post" enctype="multipart/form-data">
+            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+            <label class="file-btn" for="profileImage">사진 선택</label>
+            <input id="profileImage" class="file-input" name="profileImage" type="file" accept="image/jpeg,image/png,image/webp" required>
+            <button class="btn primary" type="submit">사진 저장</button>
+          </form>
+          <div class="profile-help" data-profile-file-name>JPG, PNG, WebP · 2MB 이하</div>
+          <form th:if="${!#strings.isEmpty(currentUser.profileImageFilename)}" th:action="@{/mypage/profile-image/delete}" method="post" style="margin-top:8px">
+            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+            <button class="rbtn del" type="submit">사진 삭제</button>
+          </form>
+        </div>
+      </section>
+      <section class="admin-form-panel mypage-info-panel ws-edit-surface">
+        <div class="section-head ws-edit-surface-head"><h2>기본정보</h2></div>
+        <form data-edit-form th:action="@{/mypage/basic-info}" method="post">
+          <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+          <div class="mypage-facts-grid">
+            <div class="field"><label>사번</label><div class="readonly-field" th:text="${#strings.isEmpty(currentUser.employeeNumber) ? '-' : currentUser.employeeNumber}">EMP-00001</div></div>
+            <div class="field"><label>입사일</label><div class="readonly-field" th:text="${currentUser.hireDate == null ? '-' : currentUser.hireDate}">2026-01-01</div></div>
+            <div class="field"><label>직급</label><div class="readonly-field" th:text="${myGradeName == null ? '미지정' : myGradeName}">-</div></div>
+            <!-- [UX32] 인사카드에서 보던 본인 정보를 마이페이지로 흡수 -->
+            <div class="field"><label>소속 (팀/본부)</label><div class="readonly-field" th:text="${#strings.isEmpty(currentUser.teamName) ? '-' : currentUser.teamName}">팀</div></div>
+            <div class="field" th:if="${releaseFeatures.attendanceEnabled}"><label>올해 연차 잔여</label><div class="readonly-field"><b th:text="|${myRemainingLeave}일|">15일</b></div></div>
+          </div>
+          <h3 class="mypage-edit-heading">연락처·업무 정보 수정</h3>
+          <div class="admin-form-grid mypage-edit-grid">
+            <div class="field"><label for="dept">부서/직무</label><input id="dept" name="dept" th:value="${currentUser.dept}" required></div>
+            <div class="field"><label for="extensionNumber">내선번호</label><input id="extensionNumber" name="extensionNumber" th:value="${currentUser.extensionNumber}"></div>
+            <div class="field"><label for="mobileNumber">핸드폰번호</label><input id="mobileNumber" name="mobileNumber" th:value="${currentUser.mobileNumber}"></div>
+            <div class="field"><label for="jobTitle">담당업무</label><input id="jobTitle" name="jobTitle" th:value="${currentUser.jobTitle}"></div>
+            <div class="field span-2"><label for="email">이메일</label><input id="email" name="email" type="email" th:value="${currentUser.email}"></div>
+          </div>
+          <div class="form-actions">
+            <span class="muted">연락 가능한 업무 정보를 최신 상태로 유지합니다.</span>
+            <button class="btn primary" type="submit">저장</button>
+          </div>
+        </form>
+      </section>
+        </div>
+        <div data-tab-panel="security" role="tabpanel" hidden>
+      <!-- [UX34] 비밀번호 변경은 모달(현재 비밀번호 검증 → 새 비밀번호 실시간 일치 확인)로 -->
+      <section class="form-panel mypage-security-panel">
+        <h2>비밀번호 변경</h2>
+        <p class="muted">현재 비밀번호를 검증한 뒤 새 비밀번호로 변경합니다. (9자 이상 · 영문·숫자·특수문자 포함)</p>
+        <button class="btn primary" type="button" data-pw-open>비밀번호 변경</button>
+      </section>
+        </div>
+        <div data-tab-panel="signature" role="tabpanel" hidden th:if="${releaseFeatures.attendanceEnabled}">
+      <section class="form-panel mypage-signature-panel" th:if="${releaseFeatures.attendanceEnabled}">
+        <h2>서명 등록</h2>
+        <p class="muted">결재 문서에 표시될 본인 서명을 등록합니다. 이미지 업로드 또는 직접 그리기 중 선택하세요.</p>
+        <div th:if="${!#strings.isEmpty(signatureFilename)}" style="margin:10px 0">
+          <img th:src="@{/signature-images/{f}(f=${signatureFilename})}" alt="내 서명"
+               style="max-width:280px;max-height:120px;border:1px solid var(--border);border-radius:8px;background:#fff;padding:6px">
+          <form th:action="@{/mypage/signature/delete}" method="post" style="margin-top:8px">
+            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+            <button class="rbtn del" type="submit">서명 삭제</button>
+          </form>
+        </div>
+        <div class="ws-inline-edit-surface">
+        <div class="section-head ws-edit-surface-head"><h3 class="mypage-edit-heading">서명 이미지 업로드</h3></div>
+        <form data-edit-form class="profile-upload-form" th:action="@{/mypage/signature}" method="post" enctype="multipart/form-data">
+          <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+          <label class="file-btn">이미지 선택<input class="file-input" type="file" name="signature" accept="image/png,image/jpeg,image/webp"></label>
+          <button class="btn primary" type="submit">업로드 저장</button>
+        </form>
+        <div class="profile-help">PNG, JPG, WebP · 1MB 이하</div>
+        </div>
+        <div style="margin-top:14px">
+          <h3 class="mypage-edit-heading">서명 직접 그리기</h3>
+          <p class="form-hint">이미지 업로드와 별도로 새 서명을 그려 저장합니다.</p>
+          <canvas id="sigCanvas" width="520" height="160"
+                  style="border:1px dashed var(--border-2);border-radius:8px;background:#fff;touch-action:none;max-width:100%"></canvas>
+          <form th:action="@{/mypage/signature/draw}" method="post" style="margin-top:8px;display:flex;gap:8px;align-items:center">
+            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+            <input type="hidden" name="dataUrl" id="sigDataUrl">
+            <button type="button" class="rbtn" id="sigClear">지우기</button>
+            <button class="btn primary" type="submit" id="sigSave">그린 서명 저장</button>
+          </form>
+        </div>
+      </section>
+        </div>
+        <div data-tab-panel="delegate" role="tabpanel" hidden th:if="${showDelegations}">
+          <section class="section-block">
+            <div class="section-header no-caret">
+              <div class="section-left"><span class="sname">부재 중 대리승인자</span><span class="scnt" th:text="${#lists.size(myDelegations)}">0</span></div>
+              <div class="section-actions"><button class="btn primary" type="button" data-modal-open="#delegateCreate"><svg th:replace="~{fragments/icons :: i('add')}"></svg> 직접 지정</button></div>
+            </div>
+            <div class="table-scroll">
+              <table class="rt board-table">
+                <thead><tr><th>기간</th><th>대리승인자</th><th>지정 경로</th><th>상태</th><th style="width:70px"></th></tr></thead>
+                <tbody>
+                <tr class="empty-tr" th:if="${#lists.isEmpty(myDelegations)}"><td colspan="5">휴가·출장·외근·휴직을 신청할 때 함께 지정하면 여기에 보입니다.</td></tr>
+                <tr th:each="d : ${myDelegations}">
+                  <td th:text="|${d.startDate} ~ ${d.endDate}|">2026-12-01 ~ 2026-12-05</td>
+                  <td th:text="${d.delegateName}">홍길동</td>
+                  <td class="muted" th:text="${d.sourceLabel}">휴가 신청</td>
+                  <td><span class="status-pill" th:classappend="${d.stateLabel == '적용 중'} ? ' ok' : ''" th:text="${d.stateLabel}">적용 중</span></td>
+                  <td>
+                    <form th:if="${d.active and d.sourceType == null}" th:action="@{/hr/delegations/{id}/delete(id=${d.id})}" method="post"
+                          data-confirm-message="이 대리승인 지정을 해제하시겠습니까?" data-confirm-ok="해제">
+                      <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                      <button class="rbtn" type="submit">해제</button>
+                    </form>
+                  </td>
+                </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+        <div data-tab-panel="link" role="tabpanel" hidden th:if="${releaseFeatures.deployEnabled}">
+      <section class="admin-form-panel mypage-sso-panel" th:if="${releaseFeatures.deployEnabled}">
+        <div class="form-section-title">배포시스템 SSO 연동</div>
+        <div th:if="${deploySsoLink != null}" style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+          <div>
+            <strong th:text="${deploySsoLink.deployName}">배포 사용자</strong>
+            <span class="muted" th:text="|(${deploySsoLink.deployLoginId})|">(loginId)</span>
+            <div class="muted" style="margin-top:4px">오피스시스템 사이드 메뉴 하단에서 배포시스템으로 이동할 수 있습니다.</div>
+          </div>
+          <form th:action="@{/mypage/deploy-sso/unlink}" method="post">
+            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+            <button class="rbtn del" type="submit">연동 해제</button>
+          </form>
+        </div>
+        <form th:if="${deploySsoLink == null}" th:action="@{/mypage/deploy-sso/link}" method="post">
+          <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+          <div class="admin-form-grid">
+            <div class="field span-2">
+              <label for="deploySsoCode">배포시스템 연동 코드</label>
+              <input id="deploySsoCode" name="code" inputmode="numeric" autocomplete="one-time-code" placeholder="배포시스템 마이페이지에서 발급한 6자리 코드" required>
+            </div>
+          </div>
+          <div class="form-actions">
+            <span class="muted">연동 후 사이드 메뉴 최하단에 배포시스템 이동 버튼이 표시됩니다.</span>
+            <button class="btn primary" type="submit">연동</button>
+          </div>
+        </form>
+      </section>
+        </div>
+      </div>
+    </div>
+<div class="schedule-edit-modal" data-settings-modal data-modal-size="compact" id="delegateCreate" hidden th:if="${showDelegations}">
+    <div class="schedule-edit-dialog compact" role="dialog" aria-modal="true" aria-labelledby="delegateCreateTitle">
+      <div class="schedule-edit-head"><strong id="delegateCreateTitle">대리승인자 직접 지정</strong><button type="button" data-modal-close aria-label="닫기"><svg th:replace="~{fragments/icons :: i('close')}"></svg></button></div>
+      <form th:action="@{/hr/delegations}" method="post">
+        <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+        <div class="schedule-edit-body">
+          <p class="muted">신청서 없이 자리를 비울 때(당일 병가 등)만 씁니다.</p>
+          <label class="field">대리승인자
+            <select name="delegateUserId" required>
+              <option value="">선택</option>
+              <option th:each="u : ${delegateCandidates}" th:value="${u.id}" th:text="|${u.name} (${u.teamName ?: '-'})|">홍길동</option>
+            </select>
+          </label>
+          <div class="form-grid two">
+            <label class="field">시작일<input type="date" name="startDate" required></label>
+            <label class="field">종료일<input type="date" name="endDate" required></label>
+          </div>
+          <label class="field">사유<input name="reason" maxlength="200" placeholder="예: 병가"></label>
+        </div>
+        <div class="schedule-edit-foot"><button class="btn primary" type="submit">지정</button><button class="rbtn" type="button" data-modal-close>닫기</button></div>
+      </form>
+    </div>
+  </div>
+    </main>
+</div>
+<script th:src="@{/js/worksystem-mypage.js}"></script>
+</body>
+</html>

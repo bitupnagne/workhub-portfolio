@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.portfolio.worksystem.mapper.OvertimeMapper">
+
+    <select id="findSetting" resultType="OvertimeSetting">
+        SELECT night_start, night_end, rate_extended, rate_night, rate_holiday, rate_holiday_over,
+               rate_public_holiday, rate_labor_day, holiday_over_hours, weekly_limit_hours,
+               daily_standard_hours, notice_threshold_minutes, updated_by
+        FROM overtime_settings WHERE id = 1
+    </select>
+
+    <update id="updateSetting" parameterType="OvertimeSetting">
+        UPDATE overtime_settings
+        SET night_start = #{nightStart}, night_end = #{nightEnd},
+            rate_extended = #{rateExtended}, rate_night = #{rateNight},
+            rate_holiday = #{rateHoliday}, rate_holiday_over = #{rateHolidayOver},
+            rate_public_holiday = #{ratePublicHoliday}, rate_labor_day = #{rateLaborDay},
+            holiday_over_hours = #{holidayOverHours}, weekly_limit_hours = #{weeklyLimitHours},
+            daily_standard_hours = #{dailyStandardHours}, notice_threshold_minutes = #{noticeThresholdMinutes},
+            updated_by = #{updatedBy}
+        WHERE id = 1
+    </update>
+
+    <select id="findGroupRules" resultType="OvertimeGroupRule">
+        SELECT group_code, extended_after_minutes, inclusive_monthly_minutes, TRUE AS configured
+        FROM overtime_group_rules
+    </select>
+
+    <insert id="upsertGroupRule" parameterType="OvertimeGroupRule">
+        INSERT INTO overtime_group_rules(group_code, extended_after_minutes, inclusive_monthly_minutes)
+        VALUES(#{groupCode}, #{extendedAfterMinutes}, #{inclusiveMonthlyMinutes})
+        ON DUPLICATE KEY UPDATE extended_after_minutes = VALUES(extended_after_minutes),
+                                inclusive_monthly_minutes = VALUES(inclusive_monthly_minutes)
+    </insert>
+
+    <delete id="deleteGroupRule">
+        DELETE FROM overtime_group_rules WHERE group_code = #{groupCode}
+    </delete>
+
+    <sql id="RequestColumns">
+        r.id, r.user_id, u.name AS member_name, u.team_id, t.name AS team_name,
+        r.work_date, r.start_at, r.end_at, r.break_minutes, r.request_kind, r.day_type,
+        r.total_minutes, r.night_minutes, r.reason, r.status, r.current_approval_step,
+        r.decided_by, r.rejected_reason, r.created_at
+    </sql>
+
+    <insert id="insertRequest" parameterType="OvertimeRequest" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO overtime_requests(user_id, work_date, start_at, end_at, break_minutes, request_kind, day_type,
+                                      total_minutes, night_minutes, reason, status, current_approval_step)
+        VALUES(#{userId}, #{workDate}, #{startAt}, #{endAt}, #{breakMinutes}, #{requestKind}, #{dayType},
+               #{totalMinutes}, #{nightMinutes}, #{reason}, #{status}, #{currentApprovalStep})
+    </insert>
+
+    <select id="findRequest" resultType="OvertimeRequest">
+        SELECT <include refid="RequestColumns"/>
+        FROM overtime_requests r
+        JOIN users u ON u.id = r.user_id
+        LEFT JOIN teams t ON t.id = u.team_id
+        WHERE r.id = #{id}
+    </select>
+
+    <select id="findRequests" resultType="OvertimeRequest">
+        SELECT <include refid="RequestColumns"/>
+        FROM overtime_requests r
+        JOIN users u ON u.id = r.user_id
+        LEFT JOIN teams t ON t.id = u.team_id
+        WHERE (#{userId} IS NULL OR r.user_id = #{userId})
+          <if test="userIds != null">
+            AND r.user_id IN
+            <foreach collection="userIds" item="uid" open="(" separator="," close=")">#{uid}</foreach>
+          </if>
+          AND (#{from} IS NULL OR r.work_date >= #{from})
+          AND (#{to} IS NULL OR r.work_date &lt;= #{to})
+        ORDER BY r.work_date DESC, r.start_at DESC, r.id DESC
+    </select>
+
+    <select id="findOverlapping" resultType="OvertimeRequest">
+        SELECT <include refid="RequestColumns"/>
+        FROM overtime_requests r
+        JOIN users u ON u.id = r.user_id
+        LEFT JOIN teams t ON t.id = u.team_id
+        WHERE r.user_id = #{userId}
+          AND r.status IN ('PENDING', 'APPROVED')
+          AND (#{excludeId} IS NULL OR r.id != #{excludeId})
+          AND r.start_at &lt; #{endAt}
+          AND r.end_at > #{startAt}
+        ORDER BY r.start_at
+        LIMIT 1
+    </select>
+
+    <update id="updateStatus">
+        UPDATE overtime_requests
+        SET status = #{status}, decided_by = #{decidedBy}, rejected_reason = #{rejectedReason}
+        WHERE id = #{id}
+    </update>
+
+    <update id="updateCurrentStep">
+        UPDATE overtime_requests SET current_approval_step = #{step} WHERE id = #{id}
+    </update>
+
+    <select id="findActiveRequests" resultType="OvertimeRequest">
+        SELECT <include refid="RequestColumns"/>
+        FROM overtime_requests r
+        JOIN users u ON u.id = r.user_id
+        LEFT JOIN teams t ON t.id = u.team_id
+        WHERE r.user_id = #{userId}
+          AND r.status IN ('PENDING', 'APPROVED')
+          AND r.work_date >= #{from}
+          AND r.work_date &lt;= #{to}
+        ORDER BY r.start_at
+    </select>
+
+    <insert id="insertSession" parameterType="OvertimeSession" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO overtime_sessions(user_id, work_date, check_in_at, check_out_at, source)
+        VALUES(#{userId}, #{workDate}, #{checkInAt}, #{checkOutAt}, #{source})
+    </insert>
+
+    <select id="findOpenSession" resultType="OvertimeSession">
+        SELECT id, user_id, work_date, check_in_at, check_out_at, source
+        FROM overtime_sessions
+        WHERE user_id = #{userId} AND check_out_at IS NULL AND check_in_at >= #{since}
+        ORDER BY check_in_at DESC
+        LIMIT 1
+    </select>
+
+    <update id="closeSession">
+        UPDATE overtime_sessions SET check_out_at = #{checkOutAt} WHERE id = #{id} AND check_out_at IS NULL
+    </update>
+
+    <select id="findSessions" resultType="OvertimeSession">
+        SELECT id, user_id, work_date, check_in_at, check_out_at, source
+        FROM overtime_sessions
+        WHERE user_id = #{userId} AND work_date >= #{from} AND work_date &lt;= #{to}
+        ORDER BY check_in_at
+    </select>
+</mapper>
